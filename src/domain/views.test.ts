@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test";
-import { monthView, yearView, summaryView } from "./views.ts";
+import { monthView, yearView, summaryView, datasetMonthSpan } from "./views.ts";
 import type { Dataset, Post, Purchase } from "./types.ts";
 
 function post(id: string, order: number, percent: number, archived = false): Post {
@@ -126,4 +126,36 @@ describe("summaryView", () => {
     expect(view.totalCharges).toBe(0);
     expect(view.byMonth).toHaveLength(0);
   });
+});
+
+test("datasetMonthSpan covers foldStartMonth through the latest activity", () => {
+  expect(datasetMonthSpan(data)).toEqual({ from: "2026-01", to: "2026-02" });
+});
+
+test("datasetMonthSpan includes future finance-plan slices", () => {
+  const financed: Dataset = {
+    ...data,
+    purchases: [
+      {
+        id: "f1",
+        date: "2026-01-05",
+        description: "Console",
+        total: { amount: 3000, currency: "DKK" },
+        splitMode: "percent",
+        splits: [{ postId: "games", value: 100, absorbsRemainder: true }],
+        schedule: {
+          slices: [
+            { month: "2026-01", amount: { amount: 1500, currency: "DKK" } },
+            { month: "2026-06", amount: { amount: 1500, currency: "DKK" } },
+          ],
+        },
+      },
+    ],
+  };
+  expect(datasetMonthSpan(financed)).toEqual({ from: "2026-01", to: "2026-06" });
+});
+
+test("datasetMonthSpan of an empty dataset is a single month", () => {
+  const bare: Dataset = { ...data, months: [], purchases: [] };
+  expect(datasetMonthSpan(bare)).toEqual({ from: "2026-01", to: "2026-01" });
 });

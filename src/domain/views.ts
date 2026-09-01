@@ -1,7 +1,7 @@
 import { incomeFor, isOverridden } from "./allocation.ts";
 import { figuresFor, foldBalances, type Fold, type PostMonthFigures } from "./fold.ts";
 import { roundMoney } from "./money.ts";
-import { monthRange, monthsOfYear } from "./months.ts";
+import { compareMonths, monthOf, monthRange, monthsOfYear } from "./months.ts";
 import type { Dataset, MonthId, Post } from "./types.ts";
 
 export interface MonthPostRow {
@@ -174,4 +174,28 @@ export function summaryView(
       base,
     ),
   };
+}
+
+/**
+ * The months worth rendering: from the fold start to the latest month touched
+ * by any month record or purchase slice, including future finance-plan slices.
+ */
+export function datasetMonthSpan(dataset: Dataset): { from: MonthId; to: MonthId } {
+  const from = dataset.settings.foldStartMonth;
+  let to = from;
+
+  const consider = (candidate: MonthId) => {
+    if (compareMonths(candidate, to) > 0) to = candidate;
+  };
+
+  for (const month of dataset.months) consider(month.id);
+  for (const purchase of dataset.purchases) {
+    if (purchase.schedule) {
+      for (const slice of purchase.schedule.slices) consider(slice.month);
+    } else {
+      consider(monthOf(purchase.date));
+    }
+  }
+
+  return { from, to };
 }
