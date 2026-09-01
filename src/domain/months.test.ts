@@ -66,3 +66,31 @@ test("monthsOfYear returns twelve padded months", () => {
 test("yearOf parses the year", () => {
   expect(yearOf("2026-09")).toBe(2026);
 });
+
+describe("month range validation", () => {
+  test("yearOf rejects out-of-range month 13", () => {
+    expect(() => yearOf("2026-13")).toThrow(/2026-13/);
+  });
+
+  test("yearOf rejects out-of-range month 00", () => {
+    expect(() => yearOf("2026-00")).toThrow(/2026-00/);
+  });
+
+  test("monthOf rejects out-of-range month 13 from IsoDate", () => {
+    expect(() => monthOf("2026-13-01")).toThrow(/2026-13-01/);
+  });
+
+  test("monthOf rejects out-of-range month 00 from IsoDate", () => {
+    expect(() => monthOf("2026-00-15")).toThrow(/2026-00-15/);
+  });
+
+  test("valid boundary month 01 works", () => {
+    expect(yearOf("2026-01")).toBe(2026);
+    expect(monthOf("2026-01-01")).toBe("2026-01");
+  });
+
+  test("valid boundary month 12 works", () => {
+    expect(yearOf("2026-12")).toBe(2026);
+    expect(monthOf("2026-12-31")).toBe("2026-12");
+  });
+});

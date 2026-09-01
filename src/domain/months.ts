@@ -3,7 +3,10 @@ import type { IsoDate, MonthId } from "./types.ts";
 function parse(id: MonthId): { year: number; month: number } {
   const match = /^(\d{4})-(\d{2})$/.exec(id);
   if (!match) throw new Error(`Invalid MonthId: ${id}`);
-  return { year: Number(match[1]), month: Number(match[2]) };
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) throw new Error(`Invalid MonthId: ${id}`);
+  return { year, month };
 }
 
 function format(year: number, month: number): MonthId {
@@ -23,6 +26,8 @@ function fromOrdinal(ordinal: number): MonthId {
 export function monthOf(date: IsoDate): MonthId {
   const match = /^(\d{4})-(\d{2})/.exec(date);
   if (!match) throw new Error(`Invalid IsoDate: ${date}`);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) throw new Error(`Invalid IsoDate: ${date}`);
   return `${match[1]}-${match[2]}`;
 }
 
