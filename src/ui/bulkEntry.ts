@@ -15,6 +15,8 @@ import { toPurchase, type PurchaseDraft } from "./purchaseForm.ts";
 export interface BulkLine {
   description: string;
   amount: number;
+  /** Optional longer context, alongside the short description label. */
+  note: string;
 }
 
 export interface BulkDraft {
@@ -26,16 +28,41 @@ export interface BulkDraft {
 
 export function emptyBulkDraft(monthId: MonthId, postId: string): BulkDraft {
   return {
-    date: `${monthId}-01`,
+    // No day: the app is about monthly spending. "2026-09" is a legal IsoDate.
+    date: monthId,
     postId,
     currency: "DKK",
-    lines: [{ description: "", amount: 0 }],
+    lines: [blankLine()],
   };
 }
 
-/** A row the user has not touched. Trailing blanks are ignored, never errors. */
+export function blankLine(): BulkLine {
+  return { description: "", amount: 0, note: "" };
+}
+
+/**
+ * A row the user has not touched at all. Trailing blanks are ignored, never
+ * errors. A row carrying ONLY a note is deliberately not blank: silently
+ * discarding something the user typed is worse than asking them to finish it.
+ */
 export function isBlankLine(line: BulkLine): boolean {
-  return line.description.trim() === "" && line.amount === 0;
+  return line.description.trim() === "" && line.amount === 0 && line.note.trim() === "";
+}
+
+/**
+ * Keeps the list ending in exactly one blank row, so filling the last row opens
+ * a fresh one. That is what lets Tab flow into a new line with no special case,
+ * and it works on touch, where there is no Tab key and hence no Add-line button.
+ */
+export function withTrailingBlank(draft: BulkDraft): BulkDraft {
+  const lines = [...draft.lines];
+  while (lines.length > 1 && isBlankLine(lines[lines.length - 1]!) && isBlankLine(lines[lines.length - 2]!)) {
+    lines.pop();
+  }
+  if (lines.length === 0 || !isBlankLine(lines[lines.length - 1]!)) {
+    lines.push(blankLine());
+  }
+  return { ...draft, lines };
 }
 
 export function filledLines(draft: BulkDraft): BulkLine[] {
@@ -54,6 +81,7 @@ export function lineToDraft(draft: BulkDraft, line: BulkLine): PurchaseDraft {
   return {
     date: draft.date,
     description: line.description,
+    note: line.note,
     amount: line.amount,
     currency: draft.currency,
     splitMode: "percent",

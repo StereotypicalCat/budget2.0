@@ -116,3 +116,31 @@ test("describeDataset counts what an import would replace", () => {
 test("exportFilename is stable and sortable", () => {
   expect(exportFilename("2026-09")).toBe("budget-2026-09.json");
 });
+
+describe("purchase dates", () => {
+  test("accepts a full date and a month-only date", () => {
+    const data = populated();
+    data.purchases[0]!.date = "2026-01-15";
+    expect(() => parseDatasetJson(JSON.stringify(data))).not.toThrow();
+    data.purchases[0]!.date = "2026-01";
+    expect(() => parseDatasetJson(JSON.stringify(data))).not.toThrow();
+  });
+
+  test("rejects a malformed date instead of letting the fold throw later", () => {
+    const data = populated();
+    data.purchases[0]!.date = "not-a-date";
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/not-a-date/);
+  });
+
+  test("rejects an out-of-range month in a purchase date", () => {
+    const data = populated();
+    data.purchases[0]!.date = "2026-13-01";
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/2026-13-01/);
+  });
+
+  test("rejects an out-of-range day", () => {
+    const data = populated();
+    data.purchases[0]!.date = "2026-01-32";
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/2026-01-32/);
+  });
+});

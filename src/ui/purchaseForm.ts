@@ -23,6 +23,7 @@ export interface PlanDraft {
 export interface PurchaseDraft {
   date: IsoDate;
   description: string;
+  note: string;
   amount: number;
   currency: Currency;
   splitMode: "percent" | "fixed";
@@ -32,8 +33,9 @@ export interface PurchaseDraft {
 
 export function emptyDraft(monthId: MonthId, postId: string): PurchaseDraft {
   return {
-    date: `${monthId}-01`,
+    date: monthId,
     description: "",
+    note: "",
     amount: 0,
     currency: "DKK",
     splitMode: "percent",
@@ -78,9 +80,12 @@ export function validatePurchase(draft: PurchaseDraft): string[] {
 }
 
 export function toPurchase(draft: PurchaseDraft): Omit<Purchase, "id"> {
+  const note = draft.note.trim();
   return {
     date: draft.date,
     description: draft.description.trim(),
+    // Omitted rather than stored as "" so an absent note stays absent.
+    ...(note === "" ? {} : { note }),
     total: { amount: draft.amount, currency: draft.currency },
     splitMode: draft.splitMode,
     splits: draft.splits.map((s) => ({ ...s })),
@@ -144,6 +149,7 @@ export function fromPurchase(purchase: Purchase): PurchaseDraft {
   return {
     date: purchase.date,
     description: purchase.description,
+    note: purchase.note ?? "",
     amount: purchase.total.amount,
     currency: purchase.total.currency,
     splitMode: purchase.splitMode,

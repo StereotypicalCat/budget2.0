@@ -122,16 +122,32 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
             <>
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <Label htmlFor="bulk-date">Date</Label>
+                  <Label htmlFor="bulk-date">
+                    {bulk.date.length > 7 ? "Date" : "Month"}
+                  </Label>
                   <Input
                     id="bulk-date"
-                    type="date"
+                    type={bulk.date.length > 7 ? "date" : "text"}
+                    readOnly={bulk.date.length <= 7}
+                    className={bulk.date.length > 7 ? undefined : "font-money"}
                     value={bulk.date}
                     onChange={(event) => {
                       const date = event.target.value;
                       setBulk((b) => ({ ...b, date }));
                     }}
                   />
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline"
+                    onClick={() =>
+                      setBulk((b) => ({
+                        ...b,
+                        date: b.date.length > 7 ? b.date.slice(0, 7) : `${b.date}-01`,
+                      }))
+                    }
+                  >
+                    {bulk.date.length > 7 ? "use the month only" : "set exact date"}
+                  </button>
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="bulk-post">Post</Label>
@@ -184,13 +200,40 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
             <>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label htmlFor="purchase-date">Date</Label>
-              <Input
-                id="purchase-date"
-                type="date"
-                value={draft.date}
-                onChange={(event) => setDraft({ ...draft, date: event.target.value })}
-              />
+              <Label htmlFor="purchase-date">
+                {draft.date.length > 7 ? "Date" : "Month"}
+              </Label>
+              {draft.date.length > 7 ? (
+                <>
+                  <Input
+                    id="purchase-date"
+                    type="date"
+                    value={draft.date}
+                    onChange={(event) => {
+                      const date = event.target.value;
+                      setDraft((d) => ({ ...d, date }));
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline"
+                    onClick={() => setDraft((d) => ({ ...d, date: d.date.slice(0, 7) }))}
+                  >
+                    use the month only
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Input id="purchase-date" value={draft.date} readOnly className="font-money" />
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline"
+                    onClick={() => setDraft((d) => ({ ...d, date: `${d.date}-01` }))}
+                  >
+                    set exact date
+                  </button>
+                </>
+              )}
             </div>
             <div className="space-y-1">
               <Label htmlFor="purchase-description">Description</Label>
@@ -232,6 +275,19 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="purchase-note">Note (optional)</Label>
+            <Input
+              id="purchase-note"
+              placeholder="Anything worth remembering about this one"
+              value={draft.note}
+              onChange={(event) => {
+                const note = event.target.value;
+                setDraft((d) => ({ ...d, note }));
+              }}
+            />
           </div>
 
           <SplitEditor draft={draft} posts={activePosts} onChange={setDraft} />

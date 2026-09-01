@@ -29,6 +29,12 @@ export function exportFilename(monthId: MonthId): string {
 // month inside the balance fold (the same defect fixed earlier in
 // src/domain/months.ts). This is the import path that made it reachable.
 const MONTH_ID = /^\d{4}-(0[1-9]|1[0-2])$/;
+/**
+ * A purchase date is "YYYY-MM-DD", or "YYYY-MM" when it has no specific day.
+ * Validated here so a malformed date is rejected at the boundary rather than
+ * throwing out of `monthOf()` deep inside the balance fold.
+ */
+const PURCHASE_DATE = /^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/;
 
 function requireCurrency(value: unknown, where: string): Currency {
   if (!CURRENCIES.includes(value as Currency)) {
@@ -96,6 +102,9 @@ export function parseDatasetJson(text: string): Dataset {
     const label = `purchase "${purchase.description}"`;
     requireCurrency(purchase.total.currency, label);
 
+    if (!PURCHASE_DATE.test(purchase.date)) {
+      throw new ImportValidationError(`${label} has an invalid date "${purchase.date}"`);
+    }
     if (purchase.splits.length === 0) {
       throw new ImportValidationError(`${label} has no splits; at least one split is required`);
     }

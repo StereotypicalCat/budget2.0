@@ -94,3 +94,17 @@ describe("month range validation", () => {
     expect(monthOf("2026-12-31")).toBe("2026-12");
   });
 });
+
+// The optional-day feature stores "YYYY-MM" when a purchase has no specific
+// day. monthOf already handled that incidentally; this pins it, because the
+// whole approach depends on it rather than on a migration.
+test("monthOf accepts a month-only date as well as a full one", () => {
+  expect(monthOf("2026-09-14")).toBe("2026-09");
+  expect(monthOf("2026-09")).toBe("2026-09");
+});
+
+test("monthOf still rejects out-of-range and malformed month-only values", () => {
+  expect(() => monthOf("2026-13")).toThrow(/2026-13/);
+  expect(() => monthOf("2026-00")).toThrow(/2026-00/);
+  expect(() => monthOf("2026-9")).toThrow(/2026-9/);
+});

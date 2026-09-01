@@ -92,7 +92,12 @@ export function PostMonthRoute() {
         <ul className="divide-y text-sm">
           {thisMonth.map(({ purchase, amount }) => (
             <li key={purchase.id} className="flex gap-3 py-2">
-              <span className="flex-1">{purchase.description}</span>
+              <span className="flex-1">
+                {purchase.description}
+                {purchase.note && (
+                  <span className="ml-2 text-xs text-muted-foreground">{purchase.note}</span>
+                )}
+              </span>
               {purchase.splits.length > 1 && (
                 <span className="text-xs text-muted-foreground">split</span>
               )}

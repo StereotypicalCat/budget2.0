@@ -96,7 +96,12 @@ export function MonthRoute() {
               const slice = sliceAmountForMonth(purchase, monthId)!;
               return (
                 <li key={purchase.id} className="flex items-center gap-3 py-2">
-                  <span className="flex-1">{purchase.description}</span>
+                  <span className="flex-1">
+                    {purchase.description}
+                    {purchase.note && (
+                      <span className="ml-2 text-xs text-muted-foreground">{purchase.note}</span>
+                    )}
+                  </span>
                   {purchase.schedule && (
                     <span className="text-xs text-muted-foreground">financed</span>
                   )}

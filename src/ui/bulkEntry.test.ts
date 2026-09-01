@@ -1,5 +1,6 @@
 import { test, expect, describe } from "bun:test";
 import {
+  withTrailingBlank,
   emptyBulkDraft,
   isBlankLine,
   filledLines,
@@ -13,15 +14,15 @@ import {
 function draft(overrides: Partial<BulkDraft> = {}): BulkDraft {
   return { ...emptyBulkDraft("2026-09", "food"), ...overrides };
 }
-const line = (description: string, amount: number) => ({ description, amount });
+const line = (description: string, amount: number, note = "") => ({ description, amount, note });
 
 describe("emptyBulkDraft", () => {
   test("starts on the first of the month with one blank line", () => {
     const d = emptyBulkDraft("2026-09", "food");
-    expect(d.date).toBe("2026-09-01");
+    expect(d.date).toBe("2026-09");
     expect(d.postId).toBe("food");
     expect(d.currency).toBe("DKK");
-    expect(d.lines).toEqual([{ description: "", amount: 0 }]);
+    expect(d.lines).toEqual([{ description: "", amount: 0, note: "" }]);
   });
 });
 
@@ -132,5 +133,53 @@ describe("toPurchases", () => {
 
   test("an empty batch produces nothing rather than a blank purchase", () => {
     expect(toPurchases(draft())).toEqual([]);
+  });
+});
+
+describe("notes and blank rows across three columns", () => {
+  const l = (description: string, amount: number, note = "") => ({ description, amount, note });
+
+  test("a row is blank only when description, amount AND note are all empty", () => {
+    expect(isBlankLine(l("", 0, ""))).toBe(true);
+    expect(isBlankLine(l("", 0, "  "))).toBe(true);
+    expect(isBlankLine(l("Milk", 0))).toBe(false);
+    expect(isBlankLine(l("", 25))).toBe(false);
+    expect(isBlankLine(l("", 0, "for the party"))).toBe(false);
+  });
+
+  test("a note-only row is not silently dropped — it asks for both missing fields", () => {
+    const errors = validateBulk(draft({ lines: [l("", 0, "for the party")] }));
+    expect(errors.some((e) => e.includes("1") && /description/i.test(e))).toBe(true);
+    expect(errors.some((e) => e.includes("1") && /amount/i.test(e))).toBe(true);
+  });
+
+  test("notes reach the stored purchases, and empty ones are omitted", () => {
+    const ps = toPurchases(draft({ lines: [l("Milk", 25, "oat"), l("Bread", 30)] }));
+    expect(ps[0]!.note).toBe("oat");
+    expect("note" in ps[1]!).toBe(false);
+  });
+});
+
+describe("withTrailingBlank", () => {
+  const l = (description: string, amount: number, note = "") => ({ description, amount, note });
+
+  test("appends a blank row when the last row has been filled in", () => {
+    const d = withTrailingBlank(draft({ lines: [l("Milk", 25)] }));
+    expect(d.lines).toHaveLength(2);
+    expect(isBlankLine(d.lines[1]!)).toBe(true);
+  });
+
+  test("leaves a list that already ends blank alone — never two trailing blanks", () => {
+    const d = withTrailingBlank(draft({ lines: [l("Milk", 25), l("", 0)] }));
+    expect(d.lines).toHaveLength(2);
+  });
+
+  test("an all-blank list keeps exactly one row", () => {
+    expect(withTrailingBlank(draft()).lines).toHaveLength(1);
+  });
+
+  test("trailing blanks beyond the first are trimmed", () => {
+    const d = withTrailingBlank(draft({ lines: [l("Milk", 25), l("", 0), l("", 0), l("", 0)] }));
+    expect(d.lines).toHaveLength(2);
   });
 });

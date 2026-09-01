@@ -15,7 +15,11 @@ export interface Money {
 
 /** "YYYY-MM". Never a Date. */
 export type MonthId = string;
-/** "YYYY-MM-DD". Never a Date. */
+/**
+ * "YYYY-MM-DD", or "YYYY-MM" when a purchase has no specific day — the app is
+ * about monthly spending, so a day is optional. `monthOf()` parses both.
+ * Never a Date.
+ */
 export type IsoDate = string;
 export type PostId = string;
 export type PurchaseId = string;
@@ -63,6 +67,8 @@ export interface Purchase {
   id: PurchaseId;
   date: IsoDate;
   description: string;
+  /** Optional longer context, alongside the short `description` label. */
+  note?: string;
   /** In the purchase's own currency. */
   total: Money;
   splitMode: "percent" | "fixed";

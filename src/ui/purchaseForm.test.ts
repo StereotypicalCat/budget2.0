@@ -17,9 +17,11 @@ function draft(overrides: Partial<PurchaseDraft> = {}): PurchaseDraft {
 }
 
 describe("emptyDraft", () => {
-  test("starts on the first of the given month with one full-weight split", () => {
+  test("starts on the month itself with one full-weight split", () => {
+    // The app is about monthly spending, so a new purchase carries no day
+    // until the user asks for one. "2026-09" is a legal IsoDate here.
     const d = emptyDraft("2026-09", "food");
-    expect(d.date).toBe("2026-09-01");
+    expect(d.date).toBe("2026-09");
     expect(d.splitMode).toBe("percent");
     expect(d.splits).toEqual([{ postId: "food", value: 100, absorbsRemainder: true }]);
     expect(d.plan).toBeNull();
@@ -199,3 +201,26 @@ describe("finance plans", () => {
 function sliceSum(draft: PurchaseDraft): number {
   return draft.plan!.slices.reduce((sum, s) => sum + s.amount.amount, 0);
 }
+
+describe("notes", () => {
+  test("a new draft starts with an empty note", () => {
+    expect(emptyDraft("2026-09", "food").note).toBe("");
+  });
+
+  test("a note round-trips through toPurchase and fromPurchase", () => {
+    const d = draft({ note: "Anna's birthday" });
+    const stored = toPurchase(d);
+    expect(stored.note).toBe("Anna's birthday");
+    expect(fromPurchase({ ...stored, id: "x" }).note).toBe("Anna's birthday");
+  });
+
+  test("an empty note is omitted from the stored purchase, not written as \"\"", () => {
+    expect("note" in toPurchase(draft({ note: "" }))).toBe(false);
+    expect("note" in toPurchase(draft({ note: "   " }))).toBe(false);
+  });
+
+  test("a purchase with no note reads back as an empty string", () => {
+    const stored = toPurchase(draft());
+    expect(fromPurchase({ ...stored, id: "x" }).note).toBe("");
+  });
+});
