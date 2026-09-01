@@ -1,13 +1,16 @@
 import { Link, useParams } from "react-router";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { useDataset } from "../hooks/useDataset.ts";
 import { useMutate } from "../hooks/useMutate.ts";
 import { monthView } from "../../domain/views.ts";
 import { addMonths } from "../../domain/months.ts";
-import { setIncome } from "../../store/actions.ts";
+import { setIncome, deletePurchase } from "../../store/actions.ts";
+import { sliceAmountForMonth } from "../../domain/charges.ts";
 import { formatMoney, formatSignedMoney } from "../format.ts";
 import { PostTable } from "../components/PostTable.tsx";
+import { PurchaseDialog } from "../components/PurchaseDialog.tsx";
 
 export function MonthRoute() {
   const { monthId = "" } = useParams();
@@ -82,6 +85,47 @@ export function MonthRoute() {
       </div>
 
       <PostTable monthId={monthId} baseCurrency={base} rows={view.rows} />
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-medium">Purchases</h2>
+          <PurchaseDialog monthId={monthId} trigger={<Button>Add purchase</Button>} />
+        </div>
+        <ul className="divide-y text-sm">
+          {dataset.purchases
+            .filter((purchase) => sliceAmountForMonth(purchase, monthId) !== null)
+            .map((purchase) => {
+              const slice = sliceAmountForMonth(purchase, monthId)!;
+              return (
+                <li key={purchase.id} className="flex items-center gap-3 py-2">
+                  <span className="flex-1">{purchase.description}</span>
+                  {purchase.schedule && (
+                    <span className="text-xs text-muted-foreground">financed</span>
+                  )}
+                  <span className="font-money">
+                    {formatMoney(slice.amount, slice.currency)}
+                  </span>
+                  <PurchaseDialog
+                    monthId={monthId}
+                    purchase={purchase}
+                    trigger={
+                      <Button size="sm" variant="ghost">
+                        edit
+                      </Button>
+                    }
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => mutate((data) => deletePurchase(data, purchase.id))}
+                  >
+                    delete
+                  </Button>
+                </li>
+              );
+            })}
+        </ul>
+      </section>
     </section>
   );
 }
