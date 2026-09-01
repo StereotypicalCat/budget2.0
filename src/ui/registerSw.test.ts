@@ -1,5 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-GlobalRegistrator.register();
+// Bun can run multiple test files in one process, and ErrorBoundary.test.tsx
+// registers happy-dom globally too — guard so both files can run together.
+if (!GlobalRegistrator.isRegistered) {
+  GlobalRegistrator.register();
+}
 
 import { test, expect } from "bun:test";
 import { registerServiceWorker } from "./registerSw.ts";

@@ -8,6 +8,7 @@ import { PostYearRoute } from "./routes/PostYearRoute.tsx";
 import { SummaryRoute } from "./routes/SummaryRoute.tsx";
 import { SettingsRoute } from "./routes/SettingsRoute.tsx";
 import { UpdatePrompt } from "./components/UpdatePrompt.tsx";
+import { RouteErrorBoundaryReset } from "./components/ErrorBoundary.tsx";
 
 export function AppRoutes() {
   const year = currentMonth.slice(0, 4);
@@ -28,15 +29,17 @@ export function AppRoutes() {
         </NavLink>
       </nav>
       <main className="p-6">
-        <Routes>
-          <Route path="/month/:monthId" element={<MonthRoute />} />
-          <Route path="/year/:year" element={<YearRoute />} />
-          <Route path="/post/:postId/month/:monthId" element={<PostMonthRoute />} />
-          <Route path="/post/:postId/year/:year" element={<PostYearRoute />} />
-          <Route path="/summary" element={<SummaryRoute />} />
-          <Route path="/settings" element={<SettingsRoute />} />
-          <Route path="*" element={<Navigate to={`/month/${currentMonth}`} replace />} />
-        </Routes>
+        <RouteErrorBoundaryReset>
+          <Routes>
+            <Route path="/month/:monthId" element={<MonthRoute />} />
+            <Route path="/year/:year" element={<YearRoute />} />
+            <Route path="/post/:postId/month/:monthId" element={<PostMonthRoute />} />
+            <Route path="/post/:postId/year/:year" element={<PostYearRoute />} />
+            <Route path="/summary" element={<SummaryRoute />} />
+            <Route path="/settings" element={<SettingsRoute />} />
+            <Route path="*" element={<Navigate to={`/month/${currentMonth}`} replace />} />
+          </Routes>
+        </RouteErrorBoundaryReset>
       </main>
       <UpdatePrompt />
     </div>
