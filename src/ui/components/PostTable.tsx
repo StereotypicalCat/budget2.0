@@ -20,11 +20,11 @@ interface Props {
  *
  * Segments, left to right, sized against a per-row scale of
  * (carried-in surplus + max(allocation, charges)):
- *   - --surplus : carried-in surplus (omitted when carriedIn <= 0)
- *   - --accent  : spend within this month's allocation, filled from the
- *                 track's left edge
- *   - --rule    : the unspent remainder of the allocation track
- *   - --overspend: spend beyond the allocation, past the track's end
+ *   - --surplus       : carried-in surplus (omitted when carriedIn <= 0)
+ *   - --budget-accent : spend within this month's allocation, filled from
+ *                       the track's left edge
+ *   - --rule          : the unspent remainder of the allocation track
+ *   - --overspend     : spend beyond the allocation, past the track's end
  */
 function carryMeterBackground(figures: PostMonthFigures): string {
   const surplus = Math.max(figures.carriedIn, 0);
@@ -41,7 +41,7 @@ function carryMeterBackground(figures: PostMonthFigures): string {
   return (
     `linear-gradient(to right, ` +
     `var(--surplus) 0%, var(--surplus) ${pSurplus}%, ` +
-    `var(--accent) ${pSurplus}%, var(--accent) ${pFillEnd}%, ` +
+    `var(--budget-accent) ${pSurplus}%, var(--budget-accent) ${pFillEnd}%, ` +
     `var(--rule) ${pFillEnd}%, var(--rule) ${pTrackEnd}%, ` +
     `var(--overspend) ${pTrackEnd}%, var(--overspend) 100%)`
   );

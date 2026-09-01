@@ -4,14 +4,22 @@
  * Design contract tokens (Tasks 18-23).
  * See .superpowers/sdd/2026-09-01-budget-app/design-contract.md
  *
- * Deliberately unlayered (not inside @layer base) so it wins the cascade
- * over the shadcn defaults imported above, which are also unlayered.
+ * Namespaced as --budget-accent (not --accent): shadcn already defines a
+ * bare --accent/--accent-foreground pair in styles/globals.css for hover
+ * backgrounds on outline/ghost buttons, select items, badges, and the
+ * dialog close button. A same-named override here would repaint that
+ * background without repainting its paired foreground, breaking contrast
+ * on every one of those controls. None of the other five tokens below
+ * collide with a shadcn token name (checked against styles/globals.css).
+ *
+ * Unlayered (not inside @layer base) so these predictably win the cascade
+ * over anything layered added later, without needing !important.
  */
 :root {
   --paper: #f2f4f6; /* cool statement-paper ground, NOT cream */
   --ink: #16212b; /* ink navy, primary text */
   --rule: #d8dee4; /* hairlines, table borders */
-  --accent: #0f6e63; /* muted teal: links, primary actions, spend fill */
+  --budget-accent: #0f6e63; /* muted teal: links, primary actions, spend fill */
   --surplus: #2f6f4e; /* carried-forward surplus */
   --overspend: #a6402b; /* ochre-red: negative balances only */
 
