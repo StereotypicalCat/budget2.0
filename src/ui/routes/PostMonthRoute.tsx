@@ -23,12 +23,17 @@ export function PostMonthRoute() {
   // Future finance-plan slices, for purchases split with this post, that have
   // not yet arrived at `monthId`. This is what surfaces a committed plan
   // before it lands. Strictly-after so the current month's slice stays in
-  // "This month" rather than also appearing here.
+  // "This month" rather than also appearing here. Also filtered through
+  // sliceAmountForMonth so a cancelled plan's remaining slices (which the
+  // fold will never actually charge) do not appear as future obligations —
+  // reusing the domain's own cancelledFromMonth rule rather than
+  // re-deriving it here.
   const committed = dataset.purchases.flatMap((purchase) => {
     if (!purchase.schedule) return [];
     if (!purchase.splits.some((s) => s.postId === postId)) return [];
     return purchase.schedule.slices
       .filter((slice) => compareMonths(slice.month, monthId) > 0)
+      .filter((slice) => sliceAmountForMonth(purchase, slice.month) !== null)
       .map((slice) => ({ purchase, slice }));
   });
 
