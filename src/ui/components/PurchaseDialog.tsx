@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SplitEditor } from "./SplitEditor.tsx";
+import { PlanEditor } from "./PlanEditor.tsx";
 import {
   emptyDraft,
   fromPurchase,
@@ -20,7 +21,7 @@ import {
 } from "../purchaseForm.ts";
 import { useDataset } from "../hooks/useDataset.ts";
 import { useMutate } from "../hooks/useMutate.ts";
-import { addPurchase, updatePurchase } from "../../store/actions.ts";
+import { addPurchase, cancelScheduleFrom, updatePurchase } from "../../store/actions.ts";
 import { CURRENCIES, type MonthId, type Purchase } from "../../domain/types.ts";
 
 interface Props {
@@ -127,6 +128,22 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
           </div>
 
           <SplitEditor draft={draft} posts={activePosts} onChange={setDraft} />
+
+          <PlanEditor draft={draft} onChange={setDraft} />
+
+          {purchase?.schedule && !purchase.schedule.cancelledFromMonth && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                mutate((data) => cancelScheduleFrom(data, purchase.id, monthId));
+                setOpen(false);
+              }}
+            >
+              Cancel remaining slices from {monthId}
+            </Button>
+          )}
 
           {errors.length > 0 && (
             <ul className="space-y-1 text-sm text-destructive">

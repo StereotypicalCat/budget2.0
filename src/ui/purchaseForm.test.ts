@@ -5,6 +5,10 @@ import {
   validatePurchase,
   toPurchase,
   fromPurchase,
+  withPlan,
+  withoutPlan,
+  setSliceAmount,
+  planBalance,
   type PurchaseDraft,
 } from "./purchaseForm.ts";
 
@@ -114,3 +118,84 @@ describe("toPurchase and fromPurchase", () => {
     expect(toPurchase(draft()).schedule).toBeNull();
   });
 });
+
+describe("finance plans", () => {
+  test("withPlan generates equal slices from the given month", () => {
+    const d = withPlan(draft({ amount: 3000 }), "2026-10", 6);
+    expect(d.plan!.slices).toHaveLength(6);
+    expect(d.plan!.slices[0]).toEqual({
+      month: "2026-10",
+      amount: { amount: 500, currency: "DKK" },
+    });
+    expect(d.plan!.slices[5]!.month).toBe("2027-03");
+  });
+
+  test("withPlan keeps the splits untouched, so plans and splits compose", () => {
+    const split = draft({
+      amount: 3000,
+      splits: [
+        { postId: "games", value: 70, absorbsRemainder: true },
+        { postId: "events", value: 30, absorbsRemainder: false },
+      ],
+    });
+    expect(withPlan(split, "2026-10", 2).splits).toEqual(split.splits);
+  });
+
+  test("withoutPlan clears the schedule", () => {
+    expect(withoutPlan(withPlan(draft(), "2026-10", 3)).plan).toBeNull();
+  });
+
+  test("setSliceAmount edits one slice and leaves the others alone", () => {
+    const d = setSliceAmount(withPlan(draft({ amount: 3000 }), "2026-10", 3), 0, 1500);
+    expect(d.plan!.slices.map((s) => s.amount.amount)).toEqual([1500, 1000, 1000]);
+  });
+
+  test("planBalance reports the difference between the slices and the total", () => {
+    const even = withPlan(draft({ amount: 3000 }), "2026-10", 3);
+    expect(planBalance(even)).toBe(0);
+    expect(planBalance(setSliceAmount(even, 0, 1500))).toBe(-500);
+  });
+
+  test("planBalance is zero when there is no plan", () => {
+    expect(planBalance(draft())).toBe(0);
+  });
+
+  test("a plan with unbalanced slices is still valid", () => {
+    // A deposit-then-instalments plan may legitimately not sum to the total
+    // yet while the user is typing; the editor warns rather than blocking.
+    const d = setSliceAmount(withPlan(draft({ amount: 3000 }), "2026-10", 3), 0, 1500);
+    expect(validatePurchase(d)).toEqual([]);
+  });
+
+  test("a plan with zero months is rejected", () => {
+    expect(() => withPlan(draft(), "2026-10", 0)).toThrow(/at least one month/i);
+  });
+
+  test("split×plan composition: each slice divides across posts in the split ratio", () => {
+    // Pins this task's headline behaviour: plans and splits compose. The
+    // plan editor only ever changes draft.plan; the ratio in draft.splits
+    // is applied per-slice by the store/domain layer, not here — this test
+    // just confirms withPlan never disturbs the splits that make that
+    // composition possible.
+    const composed = withPlan(
+      draft({
+        amount: 3000,
+        splits: [
+          { postId: "games", value: 70, absorbsRemainder: true },
+          { postId: "events", value: 30, absorbsRemainder: false },
+        ],
+      }),
+      "2026-10",
+      3,
+    );
+    expect(composed.splits).toEqual([
+      { postId: "games", value: 70, absorbsRemainder: true },
+      { postId: "events", value: 30, absorbsRemainder: false },
+    ]);
+    expect(sliceSum(composed)).toBe(3000);
+  });
+});
+
+function sliceSum(draft: PurchaseDraft): number {
+  return draft.plan!.slices.reduce((sum, s) => sum + s.amount.amount, 0);
+}

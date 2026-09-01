@@ -1,4 +1,5 @@
 import { roundMoney } from "../domain/money.ts";
+import { equalSlices, slicesBalance } from "../domain/plans.ts";
 import type {
   Currency,
   IsoDate,
@@ -92,6 +93,51 @@ export function toPurchase(draft: PurchaseDraft): Omit<Purchase, "id"> {
         }
       : null,
   };
+}
+
+export function withPlan(
+  draft: PurchaseDraft,
+  startMonth: MonthId,
+  months: number,
+): PurchaseDraft {
+  return {
+    ...draft,
+    plan: {
+      startMonth,
+      slices: equalSlices({ amount: draft.amount, currency: draft.currency }, startMonth, months),
+    },
+  };
+}
+
+export function withoutPlan(draft: PurchaseDraft): PurchaseDraft {
+  return { ...draft, plan: null };
+}
+
+export function setSliceAmount(
+  draft: PurchaseDraft,
+  index: number,
+  amount: number,
+): PurchaseDraft {
+  if (!draft.plan) return draft;
+  return {
+    ...draft,
+    plan: {
+      ...draft.plan,
+      slices: draft.plan.slices.map((slice, i) =>
+        i === index ? { ...slice, amount: { ...slice.amount, amount } } : slice,
+      ),
+    },
+  };
+}
+
+/**
+ * slices - total, delegated to the domain's slicesBalance so the "sum the
+ * slices and compare to the total" arithmetic has exactly one implementation.
+ * Positive means the slices fall short of the purchase total.
+ */
+export function planBalance(draft: PurchaseDraft): number {
+  if (!draft.plan) return 0;
+  return slicesBalance({ amount: draft.amount, currency: draft.currency }, draft.plan.slices);
 }
 
 export function fromPurchase(purchase: Purchase): PurchaseDraft {
