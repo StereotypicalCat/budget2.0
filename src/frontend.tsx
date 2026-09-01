@@ -3,18 +3,24 @@
  * element and renders the App component to the DOM.
  *
  * It is included in `src/index.html`.
+ *
+ * The store must load before React renders: `useDataset` calls `store.get()`,
+ * which throws if the snapshot has not loaded yet, so the UI can never render
+ * a blank budget as though the user had no data.
  */
 
-import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "./App";
+import "./index.css";
+import { App } from "./ui/App.tsx";
+import { store } from "./store/index.ts";
 
-const elem = document.getElementById("root")!;
-const app = (
-  <StrictMode>
-    <App />
-  </StrictMode>
+const container = document.getElementById("root") ?? document.body;
+
+store.load().then(
+  () => createRoot(container).render(<App />),
+  (error: unknown) => {
+    container.textContent = `Could not open your budget data: ${
+      error instanceof Error ? error.message : String(error)
+    }`;
+  },
 );
-
-// https://bun.com/docs/bundler/hot-reloading#import-meta-hot-data
-(import.meta.hot.data.root ??= createRoot(elem)).render(app);
