@@ -18,20 +18,44 @@ export function DataSection() {
   const [pending, setPending] = useState<Dataset | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Shared by every export button and by the pre-import backup below.
+  // `buildOds` in particular can throw (e.g. MissingRateError when a
+  // currency in use has no configured rate), and a throw out of a plain
+  // onClick handler is invisible to React's error boundary — so every
+  // export path funnels through here and reports failure via the same
+  // error state the import flow already uses. Returns whether it succeeded,
+  // so callers that depend on the export (the import backup) can tell.
+  function runExport(build: () => { filename: string; blob: Blob }): boolean {
+    try {
+      setError(null);
+      const { filename, blob } = build();
+      downloadBlob(filename, blob);
+      return true;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setError(`Could not export: ${message}`);
+      return false;
+    }
+  }
+
+  function buildJsonExport() {
+    return {
+      filename: exportFilename(currentMonth),
+      blob: new Blob([exportDatasetJson(dataset)], { type: "application/json" }),
+    };
+  }
+
   function exportJson() {
-    downloadBlob(
-      exportFilename(currentMonth),
-      new Blob([exportDatasetJson(dataset)], { type: "application/json" }),
-    );
+    runExport(buildJsonExport);
   }
 
   function exportOds() {
-    downloadBlob(
-      odsFilename(currentMonth),
-      new Blob([buildOds(dataset) as BlobPart], {
+    runExport(() => ({
+      filename: odsFilename(currentMonth),
+      blob: new Blob([buildOds(dataset) as BlobPart], {
         type: "application/vnd.oasis.opendocument.spreadsheet",
       }),
-    );
+    }));
   }
 
   async function chooseFile(file: File) {
@@ -40,7 +64,8 @@ export function DataSection() {
       setPending(parseDatasetJson(await file.text()));
     } catch (cause) {
       setPending(null);
-      setError(cause instanceof Error ? cause.message : String(cause));
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setError(`Could not import: ${message}`);
     }
   }
 
@@ -48,8 +73,9 @@ export function DataSection() {
     if (!pending) return;
     // Back up first: import replaces everything, and this is the user's only
     // copy. Order matters — the backup must download before the destructive
-    // replace, never after.
-    exportJson();
+    // replace, never after. If the backup itself fails, abort rather than
+    // destroy the only copy of the user's data.
+    if (!runExport(buildJsonExport)) return;
     await store.replace(pending);
     setPending(null);
   }
@@ -87,7 +113,7 @@ export function DataSection() {
         />
       </div>
 
-      {error && <p className="text-sm text-destructive">Could not import: {error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       {pending && (
         <div className="space-y-2 rounded border border-destructive p-3 text-sm">

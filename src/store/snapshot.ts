@@ -23,6 +23,22 @@ export function createSnapshotStore(
   let snapshot: Dataset | null = null;
   const listeners = new Set<Listener>();
 
+  // All mutations run through this chain, one at a time, so a mutation
+  // always clones from the snapshot the previous mutation committed rather
+  // than from a stale snapshot captured before it. Without this, two
+  // mutations issued before either's write resolves both clone the same
+  // starting point and the one that commits last silently discards the
+  // other's change.
+  let queue: Promise<unknown> = Promise.resolve();
+
+  function enqueue<T>(work: () => Promise<T>): Promise<T> {
+    const run = queue.then(work);
+    // Keep the chain alive after a failure, but the caller still sees the
+    // rejection via `run`, which is returned unmodified below.
+    queue = run.catch(() => undefined);
+    return run;
+  }
+
   function notify() {
     for (const listener of listeners) listener();
   }
@@ -53,14 +69,16 @@ export function createSnapshotStore(
 
     get,
 
-    async mutate(fn) {
-      const draft = structuredClone(get());
-      fn(draft);
-      await commit(draft);
+    mutate(fn) {
+      return enqueue(async () => {
+        const draft = structuredClone(get());
+        fn(draft);
+        await commit(draft);
+      });
     },
 
-    async replace(dataset) {
-      await commit(dataset);
+    replace(dataset) {
+      return enqueue(() => commit(dataset));
     },
 
     subscribe(listener) {

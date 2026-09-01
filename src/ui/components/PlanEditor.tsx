@@ -16,19 +16,42 @@ interface Props {
   onChange: (next: PurchaseDraft) => void;
 }
 
+// A native <input type="date"> reports "" until the user has filled in every
+// field, and monthOf() throws on anything that isn't a well-formed
+// YYYY-MM-DD. This is UI-level input validation, not a domain concern — the
+// domain is right to throw on malformed input; the caller just must not call
+// it with malformed input.
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function hasValidDate(draft: PurchaseDraft): boolean {
+  return ISO_DATE_PATTERN.test(draft.date);
+}
+
 export function PlanEditor({ draft, onChange }: Props) {
   const balance = planBalance(draft);
 
   if (!draft.plan) {
+    const dateReady = hasValidDate(draft);
     return (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => onChange(withPlan(draft, monthOf(draft.date), 3))}
-      >
-        Spread this over several months
-      </Button>
+      <div className="space-y-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!dateReady}
+          onClick={() => {
+            if (!dateReady) return;
+            onChange(withPlan(draft, monthOf(draft.date), 3));
+          }}
+        >
+          Spread this over several months
+        </Button>
+        {!dateReady && (
+          <p className="text-xs text-muted-foreground">
+            Pick a date for this purchase first.
+          </p>
+        )}
+      </div>
     );
   }
 
@@ -41,11 +64,12 @@ export function PlanEditor({ draft, onChange }: Props) {
           <Input
             type="number"
             min={1}
+            step={1}
             className="h-8 w-16 tabular-nums"
             value={draft.plan.slices.length}
             onChange={(event) => {
               const months = Number(event.target.value);
-              if (months >= 1) {
+              if (Number.isInteger(months) && months >= 1) {
                 onChange(withPlan(draft, draft.plan!.startMonth, months));
               }
             }}
