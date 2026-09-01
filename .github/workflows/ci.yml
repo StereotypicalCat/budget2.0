@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bunx tsc --noEmit
+      - run: bun run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t budget2 .
+      - name: Serve the image and check it responds
+        run: |
+          docker run -d --rm -p 3000:3000 --name budget2 budget2
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/ > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:3000/ | grep -q "Budget"
+          curl -fsS http://localhost:3000/sw.js > /dev/null
+          curl -fsS http://localhost:3000/manifest.webmanifest > /dev/null
+          docker stop budget2
