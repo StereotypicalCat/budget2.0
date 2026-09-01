@@ -7,6 +7,7 @@ import { PostMonthRoute } from "./routes/PostMonthRoute.tsx";
 import { PostYearRoute } from "./routes/PostYearRoute.tsx";
 import { SummaryRoute } from "./routes/SummaryRoute.tsx";
 import { SettingsRoute } from "./routes/SettingsRoute.tsx";
+import { UpdatePrompt } from "./components/UpdatePrompt.tsx";
 
 export function AppRoutes() {
   const year = currentMonth.slice(0, 4);
@@ -37,6 +38,7 @@ export function AppRoutes() {
           <Route path="*" element={<Navigate to={`/month/${currentMonth}`} replace />} />
         </Routes>
       </main>
+      <UpdatePrompt />
     </div>
   );
 }
