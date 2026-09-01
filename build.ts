@@ -95,9 +95,23 @@ export function buildManifest(base: string): string {
 await Bun.write(path.join(outdir, "manifest.webmanifest"), buildManifest(basePath));
 await Bun.write(path.join(outdir, "icon.svg"), Bun.file("src/icon.svg"));
 
+// This is an SPA: every route serves the same shell, so the *document* URL
+// can be several segments deep (e.g. /budget2.0/month/2026-09). Relative
+// hrefs in the built HTML resolve against that document URL, not the site
+// root, so "manifest.webmanifest" and "icon.svg" would 404 on any route
+// with more path segments than the base path itself. Rewrite them to be
+// absolute (prefixed with basePath, which always ends in "/") so they
+// resolve correctly no matter how deep the current route is. Done here
+// rather than hardcoded in src/index.html so the dev server (which always
+// serves from "/") keeps working unchanged.
+let indexHtml = await Bun.file(path.join(outdir, "index.html")).text();
+indexHtml = indexHtml
+  .replace('href="manifest.webmanifest"', `href="${basePath}manifest.webmanifest"`)
+  .replace('href="icon.svg"', `href="${basePath}icon.svg"`);
+await Bun.write(path.join(outdir, "index.html"), indexHtml);
+
 // GitHub Pages has no rewrite rules, so a deep link on a cold load lands on
 // 404.html. Serving the shell from there makes client-side routing work.
-const indexHtml = await Bun.file(path.join(outdir, "index.html")).text();
 await Bun.write(path.join(outdir, "404.html"), indexHtml);
 
 console.log(`Built for base path ${basePath}`);
