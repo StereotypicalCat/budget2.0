@@ -83,6 +83,8 @@ export interface Settings {
   baseCurrency: Currency;
   foldStartMonth: MonthId;
   schemaVersion: number;
+  /** Optional: no migration needed, existing datasets leave it undefined. */
+  fxApiUrl?: string;
 }
 
 export interface Dataset {

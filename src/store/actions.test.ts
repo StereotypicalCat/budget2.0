@@ -312,4 +312,31 @@ describe("settings", () => {
     expect(data.settings.baseCurrency).toBe("EUR");
     expect(data.fxRates.find((r) => r.currency === "EUR")).toBeUndefined();
   });
+
+  test("removeFxRate filters the currency out entirely, leaving no row", () => {
+    const data = draft();
+    actions.setFxRate(data, {
+      currency: "EUR",
+      baseUnitsPerOne: 7.46,
+      updatedAt: "2026-09-01",
+      source: "manual",
+    });
+    actions.setFxRate(data, {
+      currency: "USD",
+      baseUnitsPerOne: 6.9,
+      updatedAt: "2026-09-01",
+      source: "manual",
+    });
+
+    actions.removeFxRate(data, "EUR");
+
+    expect(data.fxRates.map((r) => r.currency)).toEqual(["USD"]);
+    expect(data.fxRates.find((r) => r.currency === "EUR")).toBeUndefined();
+  });
+
+  test("removeFxRate on a currency with no row is a no-op", () => {
+    const data = draft();
+    actions.removeFxRate(data, "EUR");
+    expect(data.fxRates).toEqual([]);
+  });
 });

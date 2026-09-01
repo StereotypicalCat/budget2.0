@@ -219,6 +219,18 @@ export function setFxRate(draft: Dataset, rate: FxRate): void {
   else draft.fxRates[index] = rate;
 }
 
+/**
+ * Removes a currency's rate row entirely. A cleared rate MUST become an
+ * absent row, not a stored 0: toBase() throws MissingRateError for an absent
+ * row but silently converts to 0 for a stored zero rate, which would corrupt
+ * every purchase in that currency without any error surfacing. Callers (the
+ * currency settings input) must route a cleared/invalid rate here instead of
+ * through setFxRate with a 0.
+ */
+export function removeFxRate(draft: Dataset, currency: Currency): void {
+  draft.fxRates = draft.fxRates.filter((r) => r.currency !== currency);
+}
+
 /** The base currency never has a rate row of its own. */
 export function setBaseCurrency(draft: Dataset, currency: Currency): void {
   draft.settings.baseCurrency = currency;
