@@ -6,10 +6,28 @@ export function normalizeBase(raw: string | undefined): string {
 }
 
 /**
- * Bun substitutes process.env.BUN_PUBLIC_* into client code at build time, so
- * this becomes a literal string in the bundle.
+ * Reads the build-time base path.
+ *
+ * Bun inlines a literal `process.env.FOO` reference ONLY when FOO is actually
+ * set. When it is unset — a bare `bun --hot src/index.ts`, say — the reference
+ * survives into the browser bundle, where `process` does not exist, and the app
+ * dies with `ReferenceError: process is not defined` before it can boot.
+ *
+ * try/catch rather than a `typeof process` guard, deliberately: after inlining
+ * the literal becomes a string, but a `typeof process === "undefined"` test
+ * would still run in the browser and discard that inlined value, silently
+ * breaking every subpath deploy. Catching leaves the inlined value untouched
+ * and only absorbs the unset case.
  */
-export const BASE_PATH = normalizeBase(process.env.BUN_PUBLIC_BASE_PATH);
+export function readBasePathEnv(): string | undefined {
+  try {
+    return process.env.BUN_PUBLIC_BASE_PATH;
+  } catch {
+    return undefined;
+  }
+}
+
+export const BASE_PATH = normalizeBase(readBasePathEnv());
 
 /** react-router wants the basename without a trailing slash ("" for root). */
 export const ROUTER_BASENAME = BASE_PATH === "/" ? "" : BASE_PATH.slice(0, -1);
