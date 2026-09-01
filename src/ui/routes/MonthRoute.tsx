@@ -49,14 +49,12 @@ export function MonthRoute() {
             step="0.01"
             className="font-money w-40"
             value={view.income}
-            onChange={(event) =>
-              mutate((draft) =>
-                setIncome(draft, monthId, {
-                  amount: Number(event.target.value) || 0,
-                  currency: base,
-                }),
-              )
-            }
+            onChange={(event) => {
+              // Read the DOM value NOW: mutate() defers behind the write queue,
+              // by which time React has reset this input to the committed value.
+              const amount = Number(event.target.value) || 0;
+              mutate((draft) => setIncome(draft, monthId, { amount, currency: base }));
+            }}
           />
         </div>
         <dl className="flex gap-6 text-sm">

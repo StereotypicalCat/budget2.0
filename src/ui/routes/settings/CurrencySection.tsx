@@ -44,9 +44,10 @@ export function CurrencySection() {
           id="base-currency"
           className="h-9 w-32 rounded border bg-background px-2 text-sm"
           value={base}
-          onChange={(event) =>
-            mutate((draft) => setBaseCurrency(draft, event.target.value as Currency))
-          }
+          onChange={(event) => {
+            const currency = event.target.value as Currency;
+            mutate((draft) => setBaseCurrency(draft, currency));
+          }}
         >
           {CURRENCIES.map((currency) => (
             <option key={currency} value={currency}>
@@ -115,11 +116,12 @@ export function CurrencySection() {
             id="fx-url"
             className="max-w-xl"
             value={apiUrl}
-            onChange={(event) =>
+            onChange={(event) => {
+              const url = event.target.value;
               mutate((draft) => {
-                draft.settings.fxApiUrl = event.target.value;
-              })
-            }
+                draft.settings.fxApiUrl = url;
+              });
+            }}
           />
           <p className="text-xs text-muted-foreground">
             {"{base}"} and {"{targets}"} are substituted. Fetching is optional — the app

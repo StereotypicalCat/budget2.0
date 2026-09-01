@@ -19,16 +19,17 @@ export function PostsSection() {
         <select
           className="h-8 rounded border bg-background px-1 text-xs"
           value={rule.kind}
-          onChange={(event) =>
+          onChange={(event) => {
+            const kind = event.target.value;
             mutate((draft) =>
               updatePost(draft, postId, {
                 standingRule:
-                  event.target.value === "fixed"
+                  kind === "fixed"
                     ? { kind: "fixed", amount: { amount: 0, currency: base } }
                     : { kind: "percentOfIncome", percent: 0 },
               }),
-            )
-          }
+            );
+          }}
         >
           <option value="fixed">fixed amount</option>
           <option value="percentOfIncome">% of income</option>
@@ -82,20 +83,20 @@ export function PostsSection() {
                 <Input
                   className="h-8 w-48"
                   value={post.name}
-                  onChange={(event) =>
-                    mutate((draft) => updatePost(draft, post.id, { name: event.target.value }))
-                  }
+                  onChange={(event) => {
+                    const name = event.target.value;
+                    mutate((draft) => updatePost(draft, post.id, { name }));
+                  }}
                 />
               </td>
               <td className="py-2">
                 <select
                   className="h-8 rounded border bg-background px-1 text-xs"
                   value={post.currency}
-                  onChange={(event) =>
-                    mutate((draft) =>
-                      updatePost(draft, post.id, { currency: event.target.value as Currency }),
-                    )
-                  }
+                  onChange={(event) => {
+                    const currency = event.target.value as Currency;
+                    mutate((draft) => updatePost(draft, post.id, { currency }));
+                  }}
                 >
                   {CURRENCIES.map((currency) => (
                     <option key={currency} value={currency}>
