@@ -9,7 +9,7 @@ function post(id: string, fixed: number, archived = false): Post {
     order: 0,
     archived,
     currency: "DKK",
-    standingRule: { kind: "fixed", amount: { amount: fixed, currency: "DKK" } },
+    rules: [{ from: "2026-01", rule: { kind: "fixed", amount: { amount: fixed, currency: "DKK" } } }],
   };
 }
 
@@ -114,7 +114,7 @@ test("percentage allocations follow the month's income", () => {
         order: 0,
         archived: false,
         currency: "DKK",
-        standingRule: { kind: "percentOfIncome", percent: 10 },
+        rules: [{ from: "2026-01", rule: { kind: "percentOfIncome", percent: 10 } }],
       },
     ],
     months: [

@@ -9,7 +9,7 @@ function post(id: string, order: number, percent: number, archived = false): Pos
     order,
     archived,
     currency: "DKK",
-    standingRule: { kind: "percentOfIncome", percent },
+    rules: [{ from: "2026-01", rule: { kind: "percentOfIncome", percent } }],
   };
 }
 

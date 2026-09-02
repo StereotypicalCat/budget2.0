@@ -12,14 +12,11 @@ test("seeds exactly the three named posts, in order", () => {
   expect(data.posts.map((p) => p.order)).toEqual([0, 1, 2]);
 });
 
-test("seeded posts are active with a zero fixed standing rule", () => {
+test("seeded posts are active and unbudgeted", () => {
   const data = createSeedDataset("2026-09");
   for (const post of data.posts) {
     expect(post.archived).toBe(false);
-    expect(post.standingRule).toEqual({
-      kind: "fixed",
-      amount: { amount: 0, currency: "DKK" },
-    });
+    expect(post.rules).toEqual([]);
   }
 });
 

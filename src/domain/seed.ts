@@ -1,6 +1,6 @@
 import type { Dataset, MonthId, Post } from "./types.ts";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 const SEED_POST_NAMES = ["Video Games", "Food", "Events and Social"] as const;
 
@@ -19,7 +19,9 @@ export function createSeedDataset(startMonth: MonthId): Dataset {
     order,
     archived: false,
     currency: "DKK",
-    standingRule: { kind: "fixed", amount: { amount: 0, currency: "DKK" } },
+    // A new user has genuinely not budgeted anything yet. This is a different
+    // state from a rule of zero, and the app distinguishes them.
+    rules: [],
   }));
 
   return {

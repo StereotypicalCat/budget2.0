@@ -8,7 +8,7 @@ import type { Dataset } from "../domain/types.ts";
 function populated(): Dataset {
   const data = createSeedDataset("2026-01");
   data.months[0]!.income = { amount: 20000, currency: "DKK" };
-  data.posts[1]!.standingRule = { kind: "percentOfIncome", percent: 25 };
+  data.posts[1]!.rules = [{ from: "2026-01", rule: { kind: "percentOfIncome", percent: 25 } }];
   data.purchases.push({
     id: "p1",
     date: "2026-01-15",

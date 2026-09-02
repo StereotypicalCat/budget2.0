@@ -77,34 +77,16 @@ describe("months", () => {
 describe("posts", () => {
   test("addPost appends with the next order value", () => {
     const data = draft();
-    const post = actions.addPost(data, "Travel", "EUR", {
-      kind: "percentOfIncome",
-      percent: 5,
-    });
+    const post = actions.addPost(data, "Travel", "EUR");
     expect(post.order).toBe(3);
     expect(post.archived).toBe(false);
     expect(data.posts).toHaveLength(4);
   });
 
-  test("addPost rounds a fixed standing rule's amount and a percent's percent", () => {
+  test("addPost starts the post unbudgeted", () => {
     const data = draft();
-    const fixedPost = actions.addPost(data, "Rent", "DKK", {
-      kind: "fixed",
-      amount: { amount: 12.345, currency: "DKK" },
-    });
-    expect(fixedPost.standingRule).toEqual({
-      kind: "fixed",
-      amount: { amount: 12.35, currency: "DKK" },
-    });
-
-    const percentPost = actions.addPost(data, "Travel", "EUR", {
-      kind: "percentOfIncome",
-      percent: 12.3456,
-    });
-    expect(percentPost.standingRule).toEqual({
-      kind: "percentOfIncome",
-      percent: 12.35,
-    });
+    const post = actions.addPost(data, "Travel", "EUR");
+    expect(post.rules).toEqual([]);
   });
 
   test("setPostArchived toggles without deleting", () => {
@@ -138,26 +120,6 @@ describe("posts", () => {
     const post = data.posts.find((p) => p.id === postId)!;
     expect(post.name).toBe("Games");
     expect(post.currency).toBe("DKK");
-  });
-
-  test("updatePost rounds a fixed standing rule's amount and a percent's percent", () => {
-    const data = draft();
-    const postId = data.posts[0]!.id;
-    actions.updatePost(data, postId, {
-      standingRule: { kind: "fixed", amount: { amount: 12.345, currency: "DKK" } },
-    });
-    expect(data.posts.find((p) => p.id === postId)!.standingRule).toEqual({
-      kind: "fixed",
-      amount: { amount: 12.35, currency: "DKK" },
-    });
-
-    actions.updatePost(data, postId, {
-      standingRule: { kind: "percentOfIncome", percent: 12.3456 },
-    });
-    expect(data.posts.find((p) => p.id === postId)!.standingRule).toEqual({
-      kind: "percentOfIncome",
-      percent: 12.35,
-    });
   });
 
   test("an unknown post id throws", () => {

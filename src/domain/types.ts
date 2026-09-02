@@ -28,6 +28,12 @@ export type Rule =
   | { kind: "fixed"; amount: Money }
   | { kind: "percentOfIncome"; percent: number };
 
+export interface RuleVersion {
+  /** The rule takes effect in this month and continues until the next version. */
+  from: MonthId;
+  rule: Rule;
+}
+
 export interface Post {
   id: PostId;
   name: string;
@@ -35,7 +41,12 @@ export interface Post {
   archived: boolean;
   /** Display currency for this post's own views only. All totals use base. */
   currency: Currency;
-  standingRule: Rule;
+  /**
+   * The post's allocation rule over time, sorted ascending by `from`, at most
+   * one entry per month. Empty means the post has never been budgeted, and its
+   * allocation is zero — not the same as a rule of zero.
+   */
+  rules: RuleVersion[];
 }
 
 export interface Month {

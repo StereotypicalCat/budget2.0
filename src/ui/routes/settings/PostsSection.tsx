@@ -4,7 +4,9 @@ import { Input } from "@/components/ui/input";
 import { useDataset } from "../../hooks/useDataset.ts";
 import { useMutate } from "../../hooks/useMutate.ts";
 import { addPost, movePost, setPostArchived, updatePost } from "../../../store/actions.ts";
-import { CURRENCIES, type Currency, type Rule } from "../../../domain/types.ts";
+import { CURRENCIES, type Currency, type Post } from "../../../domain/types.ts";
+import { ruleAt } from "../../../domain/allocation.ts";
+import { currentMonth } from "../../../store/index.ts";
 
 export function PostsSection() {
   const dataset = useDataset();
@@ -13,48 +15,19 @@ export function PostsSection() {
   const ordered = [...dataset.posts].sort((a, b) => a.order - b.order);
   const base = dataset.settings.baseCurrency;
 
-  function ruleEditor(postId: string, rule: Rule) {
+  function ruleSummary(post: Post) {
+    const effective = ruleAt(post, currentMonth);
+    if (!effective) {
+      return <span className="text-xs text-muted-foreground">not budgeted</span>;
+    }
+    const { rule } = effective;
     return (
-      <div className="flex items-center gap-2">
-        <select
-          className="h-8 rounded border bg-background px-1 text-xs"
-          value={rule.kind}
-          onChange={(event) => {
-            const kind = event.target.value;
-            mutate((draft) =>
-              updatePost(draft, postId, {
-                standingRule:
-                  kind === "fixed"
-                    ? { kind: "fixed", amount: { amount: 0, currency: base } }
-                    : { kind: "percentOfIncome", percent: 0 },
-              }),
-            );
-          }}
-        >
-          <option value="fixed">fixed amount</option>
-          <option value="percentOfIncome">% of income</option>
-        </select>
-        <Input
-          type="number"
-          step="0.01"
-          className="font-money h-8 w-28"
-          value={rule.kind === "fixed" ? rule.amount.amount : rule.percent}
-          onChange={(event) => {
-            const value = Number(event.target.value) || 0;
-            mutate((draft) =>
-              updatePost(draft, postId, {
-                standingRule:
-                  rule.kind === "fixed"
-                    ? { kind: "fixed", amount: { ...rule.amount, amount: value } }
-                    : { kind: "percentOfIncome", percent: value },
-              }),
-            );
-          }}
-        />
-        <span className="w-10 text-xs text-muted-foreground">
-          {rule.kind === "fixed" ? rule.amount.currency : "%"}
-        </span>
-      </div>
+      <span className="text-xs">
+        {rule.kind === "fixed"
+          ? `${rule.amount.amount} ${rule.amount.currency}`
+          : `${rule.percent}% of income`}
+        <span className="ml-1 text-muted-foreground">from {effective.from}</span>
+      </span>
     );
   }
 
@@ -105,7 +78,7 @@ export function PostsSection() {
                   ))}
                 </select>
               </td>
-              <td className="py-2">{ruleEditor(post.id, post.standingRule)}</td>
+              <td className="py-2">{ruleSummary(post)}</td>
               <td className="py-2 text-right">
                 <Button size="sm" variant="ghost" disabled={index === 0}
                   onClick={() => mutate((draft) => movePost(draft, post.id, -1))}>
@@ -140,12 +113,7 @@ export function PostsSection() {
           variant="outline"
           disabled={newName.trim() === ""}
           onClick={() => {
-            mutate((draft) =>
-              addPost(draft, newName.trim(), base, {
-                kind: "fixed",
-                amount: { amount: 0, currency: base },
-              }),
-            );
+            mutate((draft) => addPost(draft, newName.trim(), base));
             setNewName("");
           }}
         >

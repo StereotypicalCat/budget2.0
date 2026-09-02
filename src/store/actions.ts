@@ -102,19 +102,14 @@ export function setRuleOverride(
   month.ruleOverrides[postId] = roundRule(rule);
 }
 
-export function addPost(
-  draft: Dataset,
-  name: string,
-  currency: Currency,
-  standingRule: Rule,
-): Post {
+export function addPost(draft: Dataset, name: string, currency: Currency): Post {
   const post: Post = {
     id: newId(),
     name,
     order: draft.posts.length,
     archived: false,
     currency,
-    standingRule: roundRule(standingRule),
+    rules: [],
   };
   draft.posts.push(post);
   return post;
@@ -127,9 +122,6 @@ export function updatePost(
 ): void {
   const post = requirePost(draft, postId);
   const resolved: Partial<Omit<Post, "id">> = { ...changes };
-  if (changes.standingRule) {
-    resolved.standingRule = roundRule(changes.standingRule);
-  }
   Object.assign(post, resolved);
 }
 
