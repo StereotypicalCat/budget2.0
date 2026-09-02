@@ -16,27 +16,29 @@ interface Props {
 export function YearMatrix({ view, mode }: Props) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[48rem] text-sm">
+      <table className="w-full min-w-[84rem] text-sm">
         <thead className="border-b text-left text-muted-foreground">
           <tr>
             <th className="py-2">Post</th>
             {view.months.map((month) => (
-              <th key={month} className="py-2 text-right font-normal">
+              <th key={month} className="py-2 pl-4 text-right font-normal whitespace-nowrap">
                 {month.slice(5)}
               </th>
             ))}
-            <th className="py-2 text-right">Total</th>
+            <th className="py-2 pl-4 text-right">Total</th>
           </tr>
         </thead>
         <tbody>
           <tr className="border-b text-muted-foreground">
             <td className="py-2">Income</td>
             {view.incomeByMonth.map((income, i) => (
-              <td key={i} className="font-money py-2 text-right">
+              <td key={i} className="font-money py-2 pl-4 text-right whitespace-nowrap">
                 {formatAmount(income)}
               </td>
             ))}
-            <td className="font-money py-2 text-right">{formatAmount(view.totalIncome)}</td>
+            <td className="font-money py-2 pl-4 text-right whitespace-nowrap">
+              {formatAmount(view.totalIncome)}
+            </td>
           </tr>
 
           {view.rows.map((row) => (
@@ -51,7 +53,7 @@ export function YearMatrix({ view, mode }: Props) {
                 return (
                   <td
                     key={i}
-                    className={`font-money py-2 text-right ${
+                    className={`font-money py-2 pl-4 text-right whitespace-nowrap ${
                       mode === "balance" && value < 0 ? "text-overspend" : ""
                     }`}
                   >
@@ -60,7 +62,7 @@ export function YearMatrix({ view, mode }: Props) {
                 );
               })}
               <td
-                className={`font-money py-2 text-right font-medium ${
+                className={`font-money py-2 pl-4 text-right font-medium whitespace-nowrap ${
                   mode === "balance" && row.closingBalance < 0 ? "text-overspend" : ""
                 }`}
               >
