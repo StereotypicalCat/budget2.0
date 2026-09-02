@@ -7,11 +7,12 @@
  *                             [--eval=<js>|--eval-file=<path>] [--dark] [--reload]
  *                             [--profile=<dir>] [--eval-after-file=<path>]
  *
- * Why this exists: docs/ARCHITECTURE.md and docs/TODO.md both say nothing here can run a
- * browser, so appearance has never been verified. Chrome IS available, but its
- * plain `--screenshot` flag fires on the load event — before this app's async
- * IndexedDB read resolves, which captures an empty page. Driving CDP directly
- * lets us wait, act, and read console errors.
+ * Why this exists: the docs used to say nothing here could run a browser, so
+ * appearance went unverified for a long time. Chrome IS available — but its
+ * plain `--screenshot` flag fires on the load event, before this app's async
+ * IndexedDB read resolves, so it captures an empty page, which is how that
+ * belief survived. Driving CDP directly lets us wait, act, and read console
+ * errors.
  *
  * This does NOT replace a human: it cannot judge feel, and it renders with one
  * font stack on one platform. It does prove a layout exists and is not broken.

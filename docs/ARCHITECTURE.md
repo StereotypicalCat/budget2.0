@@ -126,6 +126,10 @@ Adding a "missing" guard here is a regression, not a fix:
 
 ## Gotchas paid for with real bugs
 
+`AGENTS.md` §2 carries the enforceable one-line form of these, with the test
+that fails when each reappears. What follows is the *mechanism* behind them,
+which is the part worth reading once.
+
 - **Never read `event.target.value` inside a `mutate()` callback.** `mutate`
   defers behind the queue and a write; React resets a controlled input's DOM
   value long before the callback runs, so you read the *old* value and commit
@@ -175,7 +179,11 @@ timing that happy-dom does not reproduce.
 
 ## Where the reasoning lives
 
+- `AGENTS.md` — the rules, in enforceable one-line form, and which test fails
+  when one is broken. This file holds the reasoning; that one holds the rule.
 - `docs/PRODUCT.md` — durable product truth: who it is for, what must never break.
-- `docs/TODO.md` — queued work, with the reasoning behind each decision already made.
-- `docs/specs/` — design decisions and the alternatives rejected.
+- `docs/TODO.md` — what is *still* queued, each item carrying the reasoning already
+  settled. Finished work is not kept there; it is in the commit messages.
+- `docs/specs/` — design decisions and the alternatives rejected, one document
+  per piece of work.
 - `docs/plans/` — task-by-task implementation plans.
