@@ -3,10 +3,15 @@
 Work queued for whoever picks this up next, human or agent. Ordered. Each item
 says enough to act on without re-deriving the reasoning.
 
-**Current state:** branch `chore/todo-sweep`, not merged, not pushed. 344 tests
-passing, `bunx tsc --noEmit` clean, `bun run build` succeeds. Sections 2 and 4
-are DONE; section 3 is one of four sub-projects in. Every screen has now
-actually been looked at — see section 5.
+**Current state:** merged to `main`. 419 tests passing, `bunx tsc --noEmit`
+clean, `bun run build` succeeds on both the live-fetch and offline paths.
+Sections 2 and 4 are DONE. Section 3 (redesign) is 1 of 4 sub-projects in.
+Section 6 (currencies) is DONE. Every screen has now actually been looked at —
+see section 5.
+
+**Schema is at version 3.** v1 -> v2 made allocation rules a dated series;
+v2 -> v3 moved currencies into the dataset. Both migrations are
+behaviour-preserving by construction and tested as such.
 
 ---
 
@@ -105,6 +110,35 @@ All six, `b9be882` / `71e8fc9` / `f50c65b`. Three were worse than recorded:
 - The dev manifest did not merely hardcode `scope: "/"` — it was never served
   at all; the catch-all answered with the HTML shell. One definition now feeds
   the build and the dev server (`b9be882`).
+
+## 6. ~~User-defined currencies, and amounts that carry their currency~~ — DONE
+
+Both `cdece63`. `Currency` is an open string code and `Dataset.currencies` is
+the authority on validity, symbols and decimal places; the purchase total
+field reads "30$" as USD 30.
+
+**The part worth knowing before touching money again:** `roundMoney(amount,
+digits)` takes a digit count, and its ~29 call sites each resolve digits from
+the dataset with `digitsFor`. The argument is required deliberately — every
+currency the app shipped with uses two decimals, so a default of 2 would leave
+a missed call site passing every test and silently wrong for the first
+zero-decimal currency added. `src/domain/currencyDigits.test.ts` is the only
+test that can tell a real implementation from one that assumes 2: it drives a
+JPY-style currency through rounding, both FX directions, both split modes,
+plan division, the fold and the month view.
+
+Left undone, deliberately:
+
+- **The income field and the split editor's fixed-amount fields do not parse a
+  currency yet** — only the purchase total does. Same helper
+  (`parseMoneyInput`), same three-line pattern; the income field is arguably
+  wrong to make multi-currency at all, since a month has one income.
+- **No currency picker convenience.** Adding one means typing the code, name,
+  symbol and decimals by hand. A bundled ISO 4217 list would be nicer, and is
+  pure data.
+- **Symbol collisions resolve to the first currency defined with that symbol.**
+  Fine for one "$" currency; if the owner adds two, typing the code
+  disambiguates and nothing warns them. Tested, documented, not solved.
 
 ## 5. Still needs a human
 
