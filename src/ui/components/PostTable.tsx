@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { formatMoney, formatSignedMoney } from "../format.ts";
+import { ruleAt } from "../../domain/allocation.ts";
 import type { MonthPostRow } from "../../domain/views.ts";
 import type { PostMonthFigures } from "../../domain/fold.ts";
 import type { Currency, MonthId } from "../../domain/types.ts";
@@ -10,6 +11,8 @@ interface Props {
   monthId: MonthId;
   baseCurrency: Currency;
   rows: MonthPostRow[];
+  /** Omitted on read-only mounts; only the month view offers rule editing. */
+  onChangeRule?: (postId: string) => void;
 }
 
 /**
@@ -57,7 +60,7 @@ function CarryMeter({ figures }: { figures: PostMonthFigures }) {
   );
 }
 
-export function PostTable({ monthId, baseCurrency, rows }: Props) {
+export function PostTable({ monthId, baseCurrency, rows, onChangeRule }: Props) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -87,10 +90,32 @@ export function PostTable({ monthId, baseCurrency, rows }: Props) {
                     <Badge
                       variant="secondary"
                       className="ml-2"
-                      title="This month overrides the standing rule"
+                      title="This month overrides the rule otherwise in effect"
                     >
                       overridden
                     </Badge>
+                  )}
+                  {/* A month can carry BOTH badges: a version starting in a
+                      month the user also overrode is unusual but legal, and
+                      hiding either would obscure why the number is what it
+                      is. The override still wins the allocation. */}
+                  {ruleAt(post, monthId)?.from === monthId && (
+                    <Badge
+                      variant="outline"
+                      className="ml-2"
+                      title="This post's allocation rule changes from this month"
+                    >
+                      rule changes here
+                    </Badge>
+                  )}
+                  {onChangeRule && (
+                    <button
+                      type="button"
+                      className="ml-2 text-xs text-muted-foreground underline decoration-dotted"
+                      onClick={() => onChangeRule(post.id)}
+                    >
+                      change from here
+                    </button>
                   )}
                 </td>
                 <td

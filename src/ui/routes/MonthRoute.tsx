@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,7 +7,9 @@ import { useDataset } from "../hooks/useDataset.ts";
 import { useMutate } from "../hooks/useMutate.ts";
 import { monthView } from "../../domain/views.ts";
 import { addMonths } from "../../domain/months.ts";
-import { setIncome, deletePurchase } from "../../store/actions.ts";
+import { setIncome, deletePurchase, setRuleFrom } from "../../store/actions.ts";
+import { ruleAt } from "../../domain/allocation.ts";
+import type { MonthId, Post, Rule } from "../../domain/types.ts";
 import { sliceAmountForMonth } from "../../domain/charges.ts";
 import { formatMoney, formatSignedMoney } from "../format.ts";
 import { PostTable } from "../components/PostTable.tsx";
@@ -18,6 +21,10 @@ export function MonthRoute() {
   const { mutate, error, clearError } = useMutate();
   const view = monthView(dataset, monthId);
   const base = dataset.settings.baseCurrency;
+  const [changingRuleFor, setChangingRuleFor] = useState<string | null>(null);
+  const changingPost = changingRuleFor
+    ? (dataset.posts.find((p) => p.id === changingRuleFor) ?? null)
+    : null;
 
   return (
     <section className="space-y-6">
@@ -82,7 +89,25 @@ export function MonthRoute() {
         </dl>
       </div>
 
-      <PostTable monthId={monthId} baseCurrency={base} rows={view.rows} />
+      <PostTable
+        monthId={monthId}
+        baseCurrency={base}
+        rows={view.rows}
+        onChangeRule={setChangingRuleFor}
+      />
+
+      {changingPost && (
+        <RuleFromMonth
+          // Keyed so switching posts (or months) remounts the editor. Without
+          // it React reuses the instance and useState keeps the PREVIOUS
+          // post's kind and value, silently pre-filling the wrong rule.
+          key={`${changingPost.id}:${monthId}`}
+          post={changingPost}
+          monthId={monthId}
+          initial={ruleAt(changingPost, monthId)?.rule}
+          onDone={() => setChangingRuleFor(null)}
+        />
+      )}
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -130,5 +155,82 @@ export function MonthRoute() {
         </ul>
       </section>
     </section>
+  );
+}
+
+/**
+ * "15% from July" is a decision made while looking at July. This writes the
+ * same `setRuleFrom` action the Settings history editor uses, so the two
+ * surfaces cannot drift apart.
+ */
+function RuleFromMonth({
+  post,
+  monthId,
+  initial,
+  onDone,
+}: {
+  post: Post;
+  monthId: MonthId;
+  initial: Rule | undefined;
+  onDone: () => void;
+}) {
+  const { mutate } = useMutate();
+  // Pre-filled with what is currently in effect, so nudging 10% to 15% is an
+  // edit rather than re-entry. Empty when the post has no rule yet. Held as
+  // text so the field can be cleared mid-edit; parsed once, on apply.
+  const [kind, setKind] = useState<Rule["kind"]>(initial?.kind ?? "percentOfIncome");
+  const [value, setValue] = useState<string>(
+    initial === undefined
+      ? ""
+      : String(initial.kind === "fixed" ? initial.amount.amount : initial.percent),
+  );
+
+  const amount = Number(value);
+  const valueOk = value.trim() !== "" && Number.isFinite(amount);
+
+  function apply() {
+    const rule: Rule =
+      kind === "fixed"
+        ? { kind: "fixed", amount: { amount, currency: post.currency } }
+        : { kind: "percentOfIncome", percent: amount };
+    mutate((draft) => setRuleFrom(draft, post.id, monthId, rule));
+    onDone();
+  }
+
+  return (
+    <div className="flex flex-wrap items-end gap-2 rounded border p-3 text-sm">
+      <span>
+        {post.name}: allocate from <span className="font-money">{monthId}</span> onward
+      </span>
+      <select
+        className="h-8 rounded border bg-background px-1 text-xs"
+        aria-label="Rule kind"
+        value={kind}
+        onChange={(event) => {
+          const next = event.target.value as Rule["kind"];
+          setKind(next);
+        }}
+      >
+        <option value="percentOfIncome">% of income</option>
+        <option value="fixed">fixed amount</option>
+      </select>
+      <Input
+        className="font-money h-8 w-24"
+        type="number"
+        step="0.01"
+        aria-label={kind === "fixed" ? `Amount in ${post.currency}` : "Percent of income"}
+        value={value}
+        onChange={(event) => {
+          const next = event.target.value;
+          setValue(next);
+        }}
+      />
+      <Button size="sm" disabled={!valueOk} onClick={apply}>
+        Apply
+      </Button>
+      <Button size="sm" variant="ghost" onClick={onDone}>
+        Cancel
+      </Button>
+    </div>
   );
 }
