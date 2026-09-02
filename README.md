@@ -63,6 +63,8 @@ the DKK/USD/EUR currency table, this month at zero income, no purchases.
 - `docs/PRODUCT.md` — who this is for and what must never break.
 - `AGENTS.md` — the rules for changing this codebase, and the test that catches
   each one when broken. `CLAUDE.md` and `GEMINI.md` point at it.
+- `docs/DECISIONS.md` — an index of the choices that shaped the app, and what
+  each was chosen over.
 - `docs/TODO.md` — what is still queued.
 - `docs/specs/` — one design document per piece of work, each
   recording the alternatives that were rejected.

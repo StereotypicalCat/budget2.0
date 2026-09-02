@@ -184,6 +184,8 @@ timing that happy-dom does not reproduce.
 - `docs/PRODUCT.md` — durable product truth: who it is for, what must never break.
 - `docs/TODO.md` — what is *still* queued, each item carrying the reasoning already
   settled. Finished work is not kept there; it is in the commit messages.
+- `docs/DECISIONS.md` — an index of every significant decision and what it was
+  chosen over, pointing into the specs for the argument.
 - `docs/specs/` — design decisions and the alternatives rejected, one document
   per piece of work.
 - `docs/plans/` — task-by-task implementation plans.

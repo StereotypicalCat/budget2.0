@@ -201,6 +201,7 @@ state plainly what still needs a human.
   work lives in the commit messages and in `docs/specs/`.
 - **Making a product decision** → `docs/PRODUCT.md`: who this is for, what must
   never break, and what must not be invented.
-- **Wondering why something is the way it is** → `docs/specs/` records the
-  decisions *and the alternatives that were rejected*; `docs/plans/` has the
+- **Wondering why something is the way it is** → `docs/DECISIONS.md`, an index
+  of every significant choice and what it was chosen *over*, each entry pointing
+  into `docs/specs/` for the argument in full. `docs/plans/` has the
   task-by-task implementation plans.
