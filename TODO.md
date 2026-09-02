@@ -3,36 +3,37 @@
 Work queued for whoever picks this up next, human or agent. Ordered. Each item
 says enough to act on without re-deriving the reasoning.
 
-**Current state:** branch `feature/versioned-rules`, 6 commits ahead of `main`,
-not merged, not pushed. 270 tests passing, `bunx tsc --noEmit` clean,
-`bun run build` succeeds. The branch is coherent to stop at: `SCHEMA_VERSION` is
-2 *and* its migration exists, so existing data opens.
+**Current state:** branch `feature/versioned-rules`, 9 commits ahead of `main`,
+not merged, not pushed. 288 tests passing, `bunx tsc --noEmit` clean,
+`bun run build` succeeds. Versioned allocation rules are COMPLETE, all six
+tasks. Neither new editing surface has been seen in a browser — see section 5.
 
 ---
 
-## 1. Finish time-versioned allocation rules (Tasks 3-6 of 6)
+## 1. ~~Time-versioned allocation rules~~ — DONE, all six tasks
 
 **Spec:** `docs/superpowers/specs/2026-09-02-versioned-allocation-rules-design.md`
 **Plan:** `docs/superpowers/plans/2026-09-02-versioned-allocation-rules.md`
 **Ledger + extracted briefs:** `.superpowers/sdd/2026-09-02-versioned-allocation-rules/`
 
-Tasks 1-2 are done and reviewed clean: `Post.rules: RuleVersion[]` replaced
-`Post.standingRule`, and the v1 -> v2 migration landed.
-
-| Task | What | Brief |
+| Task | What | Commit |
 |---|---|---|
-| 3 | `setRuleFrom` / `removeRuleFrom` actions | `task-3-brief.md` |
-| 4 | JSON import validation for the rule series | `task-4-brief.md` |
-| 5 | Rule-history editor in Settings | `task-5-brief.md` |
-| 6 | "Change from here" control in the month view | `task-6-brief.md` |
+| 1 | `Post.rules: RuleVersion[]` replaces `standingRule` | `68712e7` |
+| 2 | v1 -> v2 migration | `15dcf93`, `1214d2b` |
+| 3 | `setRuleFrom` / `removeRuleFrom` actions | `de128e3` |
+| 4 | JSON import validation for the rule series | `1cb91d3` |
+| 5 | Rule-history editor in Settings | `e3023d0` |
+| 6 | "Change from here" control in the month view | `f94e458` |
 
-To resume: read the ledger's handoff section, then execute with
-`superpowers:subagent-driven-development` (or by hand — the briefs are complete,
-with real code in every step).
+Tasks 3-6 were executed by hand rather than dispatched. Every deviation from
+the briefs is recorded in the ledger's task log with its reasoning; four of
+them fixed real defects in the brief code (JSX that would not compile, a
+component that pre-filled the previous post's rule, a number field that could
+not be cleared, and missing validation that let a NaN allocation into the
+fold). Worth a read before reviewing the diff.
 
-**Watch for:** Task 3 must make `setRuleFrom` REPLACE an existing version for the
-same month rather than append. Two versions sharing a `from` make the effective
-rule ambiguous, and `ruleAt` would resolve arbitrarily.
+Not yet done for this feature: nobody has independently reviewed tasks 3-6, and
+no browser has seen the two new editing surfaces.
 
 ## 2. Baked FX rates — designed and approved, not built
 
@@ -88,6 +89,10 @@ seen by anyone:
 
 - the **carry meter** under each post row in the month view — the signature
   design element, verified only as a CSS gradient expression;
+- the **rule-history editor** in Settings and the **"change from here"** control
+  in the month view. Their arithmetic is verified through the real fold, and
+  both badge predicates were driven as pure functions, but nobody has seen the
+  expand/collapse, the layout, the disabled states, or the focus order;
 - **offline behaviour**, the **install prompt**, and the **update prompt**;
 - the generated **`.ods` opening in a real spreadsheet** (validated
   structurally: mimetype first and stored, well-formed XML, numeric cells);
