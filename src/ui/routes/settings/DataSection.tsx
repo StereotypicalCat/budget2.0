@@ -122,7 +122,6 @@ export function DataSection() {
       title="Your data"
       hint="Everything lives in this browser. Export regularly — it is both your backup and how you move your budget to another device."
     >
-
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={exportJson}>
           Export JSON
@@ -135,7 +134,7 @@ export function DataSection() {
         </Button>
         <Button
           variant="outline"
-          className="text-destructive hover:text-destructive"
+          className="ms-auto border-destructive/40 text-destructive hover:border-destructive hover:bg-destructive/5 hover:text-destructive"
           onClick={() => {
             setError(null);
             setPending(null);
@@ -160,7 +159,7 @@ export function DataSection() {
       {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
       {confirmingReset && (
-        <div className="mt-3 space-y-2 rounded border border-destructive p-3 text-sm">
+        <div className="mt-4 space-y-3 rounded-md border border-destructive/60 bg-destructive/5 p-4 text-sm">
           <p className="font-medium">This deletes everything in this browser.</p>
           <p>
             Now: {counts.posts} posts, {counts.months} months, {counts.purchases} purchases,{" "}
@@ -186,7 +185,7 @@ export function DataSection() {
       )}
 
       {pending && (
-        <div className="mt-3 space-y-2 rounded border border-destructive p-3 text-sm">
+        <div className="mt-4 space-y-3 rounded-md border border-destructive/60 bg-destructive/5 p-4 text-sm">
           <p className="font-medium">This replaces everything currently stored.</p>
           <p>
             Now: {counts.posts} posts, {counts.months} months, {counts.purchases} purchases.

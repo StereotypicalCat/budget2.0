@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useMutate } from "../hooks/useMutate.ts";
 import { removeRuleFrom, setRuleFrom } from "../../store/actions.ts";
 import { currentMonth } from "../../store/index.ts";
@@ -47,7 +48,7 @@ export function RuleHistory({ post }: Props) {
   }
 
   return (
-    <div className="space-y-2 rounded border p-3">
+    <div className="space-y-3 rounded-md border border-budget-rule p-3">
       {post.rules.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           Not budgeted. Until a rule starts, this post is allocated nothing —
@@ -99,8 +100,8 @@ export function RuleHistory({ post }: Props) {
             setFrom(next);
           }}
         />
-        <select
-          className="h-8 rounded border bg-background px-1 text-xs"
+        <NativeSelect
+          className="h-8 w-auto text-xs md:text-xs"
           aria-label="Rule kind"
           value={kind}
           onChange={(event) => {
@@ -110,7 +111,7 @@ export function RuleHistory({ post }: Props) {
         >
           <option value="percentOfIncome">% of income</option>
           <option value="fixed">fixed amount</option>
-        </select>
+        </NativeSelect>
         <Input
           className="font-money h-8 w-24"
           type="number"

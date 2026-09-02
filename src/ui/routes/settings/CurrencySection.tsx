@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Section } from "../../components/Section.tsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Label } from "@/components/ui/label";
 import { useDataset } from "../../hooks/useDataset.ts";
 import { useMutate } from "../../hooks/useMutate.ts";
@@ -74,9 +75,9 @@ export function CurrencySection() {
         >
           Base currency (all totals use this)
         </Label>
-        <select
+        <NativeSelect
           id="base-currency"
-          className="h-9 w-40 rounded-md border border-input bg-background px-2 text-sm"
+          className="w-40"
           value={base}
           onChange={(event) => {
             const currency = event.target.value;
@@ -88,7 +89,7 @@ export function CurrencySection() {
               {code}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
 
       <div className="overflow-x-auto">
@@ -192,9 +193,9 @@ export function CurrencySection() {
                   </td>
                   <td className="py-2 pl-4 text-right">
                     <Button
-                      size="sm"
+                      size="xs"
                       variant="ghost"
-                      className="text-overspend hover:text-overspend disabled:opacity-40"
+                      className="-mr-2 text-overspend hover:text-overspend disabled:opacity-40"
                       disabled={used.length > 0}
                       title={
                         used.length > 0
@@ -217,7 +218,7 @@ export function CurrencySection() {
 
       <AddCurrency onAdd={(def) => tryEdit(() => mutate((draft) => addCurrency(draft, def)))} />
 
-      <div className="mt-5 space-y-2 border-t border-budget-rule pt-5">
+      <div className="mt-6 border-t border-budget-rule pt-5">
         <div className="space-y-1.5">
           <Label
             htmlFor="fx-url"
@@ -236,16 +237,20 @@ export function CurrencySection() {
               });
             }}
           />
-          <p className="text-xs text-budget-ink-muted">
+          <p className="max-w-[70ch] text-xs leading-relaxed text-budget-ink-muted">
             {"{base}"} and {"{targets}"} are substituted. Fetching is optional — the app
             works offline with the rates you type in above, and a currency the service
             does not know can always be maintained by hand.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void refresh()}>
+        <Button variant="outline" className="mt-4" onClick={() => void refresh()}>
           Fetch rates now
         </Button>
-        {status && <p className="text-xs text-budget-ink-muted">{status}</p>}
+        {status && (
+          <p className="mt-3 max-w-[70ch] text-xs leading-relaxed text-budget-ink-muted">
+            {status}
+          </p>
+        )}
       </div>
     </Section>
   );
@@ -277,7 +282,7 @@ function AddCurrency({ onAdd }: { onAdd: (def: { code: Currency; digits: number;
   }
 
   return (
-    <div className="mt-4 flex flex-wrap items-end gap-2">
+    <div className="mt-5 flex flex-wrap items-end gap-2 border-t border-budget-rule pt-5">
       <Input
         className="font-money h-9 w-24 uppercase"
         placeholder="JPY"
@@ -308,27 +313,23 @@ function AddCurrency({ onAdd }: { onAdd: (def: { code: Currency; digits: number;
           setSymbol(next);
         }}
       />
-      <div className="space-y-1">
-        <Label
-          htmlFor="new-digits"
-          className="text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted"
-        >
-          Decimals
-        </Label>
-        <Input
-          id="new-digits"
-          type="number"
-          min="0"
-          max="4"
-          step="1"
-          className="font-money h-9 w-16 text-right"
-          value={digits}
-          onChange={(event) => {
-            const next = event.target.value;
-            setDigits(next);
-          }}
-        />
-      </div>
+      {/* No visible label. Its three siblings are labelled by placeholder, and
+          the DECIMALS column heading sits directly above this field in the
+          table — a fourth label here read as a heading for the whole row. */}
+      <Input
+        id="new-digits"
+        type="number"
+        min="0"
+        max="4"
+        step="1"
+        aria-label="Decimal places for the new currency"
+        className="font-money h-9 w-16 text-right"
+        value={digits}
+        onChange={(event) => {
+          const next = event.target.value;
+          setDigits(next);
+        }}
+      />
       <Button variant="outline" disabled={!canAdd} onClick={add}>
         Add currency
       </Button>
