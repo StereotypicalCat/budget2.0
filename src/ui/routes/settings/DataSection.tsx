@@ -17,6 +17,7 @@ export function DataSection() {
   const dataset = useDataset();
   const fileInput = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<Dataset | null>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Shared by every export button and by the pre-import backup below.
@@ -61,6 +62,7 @@ export function DataSection() {
 
   async function chooseFile(file: File) {
     setError(null);
+    setConfirmingReset(false);
     try {
       setPending(parseDatasetJson(await file.text()));
     } catch (cause) {
@@ -91,6 +93,28 @@ export function DataSection() {
     setPending(null);
   }
 
+  /**
+   * Back to a brand-new browser: the seed posts, the seed currency table and
+   * the baked rates. `store.reset()` is the same call `load()` makes on a
+   * first run, so the two cannot drift apart.
+   *
+   * Order of operations is the import flow's, for the import flow's reason:
+   * this is the user's only copy, so the backup must download BEFORE the
+   * destructive write, and a backup that fails aborts the reset rather than
+   * destroying data no one has a copy of.
+   */
+  async function confirmReset() {
+    if (!runExport(buildJsonExport)) return;
+    try {
+      await store.reset();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setError(`Could not reset: ${message}. Your data has not been changed.`);
+      return;
+    }
+    setConfirmingReset(false);
+  }
+
   const counts = describeDataset(dataset);
 
   return (
@@ -109,6 +133,17 @@ export function DataSection() {
         <Button variant="outline" onClick={() => fileInput.current?.click()}>
           Import JSON…
         </Button>
+        <Button
+          variant="outline"
+          className="text-destructive hover:text-destructive"
+          onClick={() => {
+            setError(null);
+            setPending(null);
+            setConfirmingReset(true);
+          }}
+        >
+          Reset everything…
+        </Button>
         <input
           ref={fileInput}
           type="file"
@@ -122,10 +157,36 @@ export function DataSection() {
         />
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+
+      {confirmingReset && (
+        <div className="mt-3 space-y-2 rounded border border-destructive p-3 text-sm">
+          <p className="font-medium">This deletes everything in this browser.</p>
+          <p>
+            Now: {counts.posts} posts, {counts.months} months, {counts.purchases} purchases,{" "}
+            {dataset.currencies.length} currencies.
+            <br />
+            After reset: the three starter posts (Video Games, Food, Events and Social), the
+            DKK / USD / EUR currency table with the built-in exchange rates, this month at
+            zero income, and no purchases. Your own posts, currencies, income and allocation
+            history are all replaced.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            A backup of your current data will download first.
+          </p>
+          <div className="flex gap-2">
+            <Button variant="destructive" size="sm" onClick={() => void confirmReset()}>
+              Reset my data
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setConfirmingReset(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
 
       {pending && (
-        <div className="space-y-2 rounded border border-destructive p-3 text-sm">
+        <div className="mt-3 space-y-2 rounded border border-destructive p-3 text-sm">
           <p className="font-medium">This replaces everything currently stored.</p>
           <p>
             Now: {counts.posts} posts, {counts.months} months, {counts.purchases} purchases.

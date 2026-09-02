@@ -1,7 +1,7 @@
 import { test, expect, describe } from "bun:test";
 
 /**
- * CLAUDE.md's hardest-won rule, made mechanical.
+ * AGENTS.md's hardest-won rule, made mechanical.
  *
  * shadcn uses several tokens as a BACKGROUND with a paired FOREGROUND for the
  * text on it. Redefining one without the other repaints the background and

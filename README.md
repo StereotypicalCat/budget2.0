@@ -8,7 +8,7 @@ your browser — there is no server and no account.
 
 ```bash
 bun install
-bun --hot src/index.ts    # dev server with hot reload
+bun run dev               # dev server with hot reload, on :3000
 bun test                  # run the test suite
 bun run build             # production build into dist/
 ```
@@ -37,8 +37,12 @@ the source in the repository settings.
 
 Everything is stored in this browser's IndexedDB. **Export regularly** from
 Settings → Your data: the JSON export is both your backup and how you move your
-budget to another device. Import replaces everything and downloads a backup of
-your current data first.
+budget to another device.
+
+Both destructive actions there — Import, and "Reset everything" — download a
+backup of your current data before replacing it, and abort if that download
+fails. Reset puts the app back to a brand-new install: the three starter posts,
+the DKK/USD/EUR currency table, this month at zero income, no purchases.
 
 ## Known limitations
 
@@ -46,12 +50,22 @@ your current data first.
   browser's site data, or move to a different browser or device, your budget is
   gone unless you exported it first. The JSON export is not just a nice-to-have
   backup — it is the only way to move a budget between devices.
-- **The install prompt is incomplete.** `manifest.webmanifest` currently only
-  ships an SVG icon. Chrome requires PNG icons at 192×192 and 512×512 to offer
-  the "Install app" prompt; until those are added, the app works fine as a
-  regular tab but won't be installable on Chrome/Chromium.
+- **Installing and offline use are unverified.** The manifest ships the SVG plus
+  192×192 and 512×512 PNG icons, and the service worker demonstrably installs,
+  activates and precaches every asset — but nobody has yet confirmed that Chrome
+  offers its "Install app" prompt, or loaded the app with the network actually
+  cut. It works as a regular tab regardless.
 
 ## Documentation
 
-- Design: `docs/superpowers/specs/2026-09-01-budget-app-design.md`
-- Implementation plan: `docs/superpowers/plans/2026-09-01-budget-app.md`
+- `docs/ARCHITECTURE.md` — layers, data flow, and why the non-obvious choices are
+  what they are.
+- `docs/PRODUCT.md` — who this is for and what must never break.
+- `AGENTS.md` — the rules for changing this codebase, and the test that catches
+  each one when broken. `CLAUDE.md` and `GEMINI.md` point at it.
+- `docs/DECISIONS.md` — an index of the choices that shaped the app, and what
+  each was chosen over.
+- `docs/TODO.md` — what is still queued.
+- `docs/specs/` — one design document per piece of work, each
+  recording the alternatives that were rejected.
+- `docs/plans/` — task-by-task implementation plans.

@@ -1,5 +1,10 @@
 import { test, expect } from "bun:test";
-import { formatAmount, formatMoney, formatSignedMoney } from "./format.ts";
+import {
+  formatAmount,
+  formatMoney,
+  formatSignedAmount,
+  formatSignedMoney,
+} from "./format.ts";
 
 test("formatAmount groups thousands and always shows two decimals", () => {
   expect(formatAmount(1234.5)).toBe("1,234.50");
@@ -15,4 +20,10 @@ test("formatSignedMoney marks positive balances with a plus", () => {
   expect(formatSignedMoney(200, "DKK")).toBe("+200.00 DKK");
   expect(formatSignedMoney(-200, "DKK")).toBe("-200.00 DKK");
   expect(formatSignedMoney(0, "DKK")).toBe("0.00 DKK");
+});
+
+test("formatSignedAmount signs the number without naming a currency", () => {
+  expect(formatSignedAmount(200)).toBe("+200.00");
+  expect(formatSignedAmount(-200)).toBe("-200.00");
+  expect(formatSignedAmount(0)).toBe("0.00");
 });

@@ -18,6 +18,13 @@ export interface MonthViewModel {
   totalCharges: number;
   /** income - totalAllocation. Negative when allocations exceed income. */
   unallocated: number;
+  /**
+   * How many rows are overspent — `remaining < 0`, so a post at exactly zero
+   * does not count. Computed here rather than in the component because it is
+   * the month-level answer to "did I overspend", and it belongs where the
+   * rest of the month's arithmetic is tested.
+   */
+  overspentCount: number;
   rows: MonthPostRow[];
 }
 
@@ -61,6 +68,7 @@ export function monthView(dataset: Dataset, monthId: MonthId): MonthViewModel {
     totalAllocation,
     totalCharges,
     unallocated: roundMoney(income - totalAllocation, baseDigits),
+    overspentCount: rows.filter((r) => r.figures.remaining < 0).length,
     rows,
   };
 }

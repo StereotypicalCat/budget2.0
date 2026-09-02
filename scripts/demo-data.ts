@@ -11,7 +11,7 @@
  * profile on every run unless you pass --profile, so without this every
  * screenshot shows an app full of zeros.
  *
- * The data is visibly synthetic on purpose. PRODUCT.md: the owner's real budget
+ * The data is visibly synthetic on purpose. docs/PRODUCT.md: the owner's real budget
  * never leaves their browser, so it is never available as example material, and
  * illustrative data must not pretend to be real.
  */
@@ -19,7 +19,7 @@ import { createSeedDataset } from "../src/domain/seed.ts";
 import * as actions from "../src/store/actions.ts";
 import { FALLBACK_FX_RATES } from "../src/store/bakedRates.ts";
 
-// Visibly synthetic, per PRODUCT.md: the owner's real budget must never be
+// Visibly synthetic, per docs/PRODUCT.md: the owner's real budget must never be
 // used as example material, and illustrative data must not look real.
 const d = createSeedDataset("2026-01", FALLBACK_FX_RATES);
 const [games, food, social] = d.posts as [typeof d.posts[0], typeof d.posts[0], typeof d.posts[0]];

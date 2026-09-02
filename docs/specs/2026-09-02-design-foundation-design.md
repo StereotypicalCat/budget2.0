@@ -48,7 +48,7 @@ colours app components may name.
 
 ### The brand teal is `--primary`, never `--accent`
 
-CLAUDE.md's hardest-won rule is "never define a bare `--accent`", paid for with
+AGENTS.md's hardest-won rule is "never define a bare `--accent`", paid for with
 an app-wide contrast bug. The mechanism matters: shadcn uses `--accent` as a
 hover **background** with `--accent-foreground` as the text on it. Setting one
 without the other repaints the background and leaves the text behind.
@@ -76,7 +76,7 @@ rather than on the arithmetic.
 
 Inter for text, JetBrains Mono for figures, both variable, both self-hosted,
 latin + latin-ext only. SIL OFL 1.1; licences committed beside the files.
-Self-hosted rather than CDN-linked because PRODUCT.md's position is that the
+Self-hosted rather than CDN-linked because docs/PRODUCT.md's position is that the
 data never leaves the browser and the app needs no third party — a font request
 to another origin on every cold load quietly contradicts that.
 

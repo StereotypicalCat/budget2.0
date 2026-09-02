@@ -74,6 +74,13 @@ Three deliberate properties in that chain:
 - **Cloned.** `useSyncExternalStore` detects change by reference identity;
   mutating in place makes the UI silently stop re-rendering.
 
+The two whole-dataset writes take the same queue and the same rules:
+`store.replace()` behind JSON import, and `store.reset()` behind Settings'
+"Reset everything". `reset()` calls the same `createSeedDataset` that `load()`
+uses on a first run, so "reset" and "a brand-new browser" cannot drift apart.
+Both are preceded in the UI by a JSON backup download that must succeed before
+the destructive write is attempted.
+
 ## Money
 
 A float, deliberately, with two rules that make it safe:
@@ -118,6 +125,10 @@ Adding a "missing" guard here is a regression, not a fix:
 - negative amounts (a refund is a normal line).
 
 ## Gotchas paid for with real bugs
+
+`AGENTS.md` §2 carries the enforceable one-line form of these, with the test
+that fails when each reappears. What follows is the *mechanism* behind them,
+which is the part worth reading once.
 
 - **Never read `event.target.value` inside a `mutate()` callback.** `mutate`
   defers behind the queue and a write; React resets a controlled input's DOM
@@ -168,7 +179,13 @@ timing that happy-dom does not reproduce.
 
 ## Where the reasoning lives
 
-- `PRODUCT.md` — durable product truth: who it is for, what must never break.
-- `TODO.md` — queued work, with the reasoning behind each decision already made.
-- `docs/superpowers/specs/` — design decisions and the alternatives rejected.
-- `docs/superpowers/plans/` — task-by-task implementation plans.
+- `AGENTS.md` — the rules, in enforceable one-line form, and which test fails
+  when one is broken. This file holds the reasoning; that one holds the rule.
+- `docs/PRODUCT.md` — durable product truth: who it is for, what must never break.
+- `docs/TODO.md` — what is *still* queued, each item carrying the reasoning already
+  settled. Finished work is not kept there; it is in the commit messages.
+- `docs/DECISIONS.md` — an index of every significant decision and what it was
+  chosen over, pointing into the specs for the argument.
+- `docs/specs/` — design decisions and the alternatives rejected, one document
+  per piece of work.
+- `docs/plans/` — task-by-task implementation plans.

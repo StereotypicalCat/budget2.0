@@ -1,7 +1,7 @@
 import { test, expect, describe } from "bun:test";
 import { createSnapshotStore, type Persistence } from "./snapshot.ts";
 import { createSeedDataset } from "../domain/seed.ts";
-import type { Dataset } from "../domain/types.ts";
+import type { Dataset, FxRate } from "../domain/types.ts";
 
 function fakePersistence(initial: Dataset | null = null) {
   const writes: Dataset[] = [];
@@ -161,6 +161,86 @@ test("replace swaps the whole dataset, as JSON import needs", async () => {
   await store.replace(incoming);
   expect(store.get().settings.foldStartMonth).toBe("2020-01");
   expect(fake.stored!.settings.foldStartMonth).toBe("2020-01");
+});
+
+describe("reset", () => {
+  test("puts back exactly what a first run would have produced", async () => {
+    const fake = fakePersistence(null);
+    const rates: FxRate[] = [
+      { currency: "USD", baseUnitsPerOne: 6.449532, updatedAt: "2026-09-01", source: "manual" },
+    ];
+    const store = createSnapshotStore(fake.persistence, "2026-09", rates);
+    await store.load();
+
+    // Diverge from the seed in every direction a reset has to undo: an added
+    // currency, a renamed post, recorded income and a purchase.
+    await store.mutate((draft) => {
+      draft.currencies.push({ code: "JPY", digits: 0, symbol: "\u00a5", name: "Japanese yen" });
+      draft.posts[0]!.name = "Renamed";
+      draft.posts.push({
+        id: "extra",
+        name: "Extra",
+        order: 9,
+        archived: false,
+        currency: "DKK",
+        rules: [],
+      });
+      draft.months[0]!.income = { amount: 28000, currency: "DKK" };
+      draft.purchases.push({
+        id: "p1",
+        date: "2026-09-04",
+        description: "Groceries",
+        total: { amount: 100, currency: "DKK" },
+        splitMode: "percent",
+        splits: [{ postId: draft.posts[0]!.id, value: 100, absorbsRemainder: true }],
+        schedule: null,
+      });
+    });
+
+    let notifications = 0;
+    store.subscribe(() => notifications++);
+    await store.reset();
+
+    const after = store.get();
+    // Post IDs are freshly generated, so compare on everything else.
+    expect(after.posts.map((p) => p.name)).toEqual([
+      "Video Games",
+      "Food",
+      "Events and Social",
+    ]);
+    expect(after.currencies.map((c) => c.code)).toEqual(["DKK", "USD", "EUR"]);
+    expect(after.fxRates).toEqual(rates);
+    expect(after.purchases).toEqual([]);
+    expect(after.months).toHaveLength(1);
+    expect(after.months[0]!.income.amount).toBe(0);
+    expect(notifications).toBe(1);
+  });
+
+  test("persists, so the reset survives a reload", async () => {
+    const fake = fakePersistence(null);
+    const store = createSnapshotStore(fake.persistence, "2026-09");
+    await store.load();
+    await store.mutate((draft) => {
+      draft.posts.length = 0;
+    });
+    await store.reset();
+    expect(fake.stored!.posts).toHaveLength(3);
+  });
+
+  test("leaves the snapshot untouched when the write fails", async () => {
+    const fake = fakePersistence(createSeedDataset("2026-09"));
+    const store = createSnapshotStore(fake.persistence, "2026-09");
+    await store.load();
+    await store.mutate((draft) => {
+      draft.posts[0]!.name = "Renamed";
+    });
+
+    fake.persistence.write = async () => {
+      throw new Error("quota exceeded");
+    };
+    await expect(store.reset()).rejects.toThrow("quota exceeded");
+    expect(store.get().posts[0]!.name).toBe("Renamed");
+  });
 });
 
 test("unsubscribe stops notifications", async () => {

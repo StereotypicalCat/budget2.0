@@ -25,7 +25,7 @@ import type {
  * store.mutate(), which clones before applying and writes through afterwards.
  *
  * Every MONEY amount that flows through here is rounded to its currency's
- * minor unit (via roundMoney) before it lands in the draft, per CLAUDE.md's
+ * minor unit (via roundMoney) before it lands in the draft, per AGENTS.md's
  * "round before persisting" rule. FxRate.baseUnitsPerOne is deliberately
  * exempted in setFxRate below — an exchange rate is not money, and rounding
  * it to cents would be wrong in kind (see the comment there).

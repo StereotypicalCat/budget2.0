@@ -3,7 +3,7 @@
  *
  *   bun scripts/fetch-fonts.ts
  *
- * Self-hosted, not linked from a CDN, because PRODUCT.md's position is that the
+ * Self-hosted, not linked from a CDN, because docs/PRODUCT.md's position is that the
  * app works offline and needs no third party: a font request to another origin
  * on every cold load contradicts that, and would leak the fact that the app was
  * opened. The files are COMMITTED so neither the build nor a fresh checkout

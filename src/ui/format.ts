@@ -14,7 +14,16 @@ export function formatMoney(amount: number, currency: Currency): string {
   return `${formatAmount(amount)} ${currency}`;
 }
 
+/**
+ * A signed amount with no currency code. For columns whose currency is stated
+ * once in the header — the month view's post table, where every figure is in
+ * the dataset's base currency, and repeating the code on all thirty cells only
+ * bought a line wrap at phone width.
+ */
+export function formatSignedAmount(amount: number): string {
+  return `${amount > 0 ? "+" : ""}${formatAmount(amount)}`;
+}
+
 export function formatSignedMoney(amount: number, currency: Currency): string {
-  const sign = amount > 0 ? "+" : "";
-  return `${sign}${formatMoney(amount, currency)}`;
+  return `${formatSignedAmount(amount)} ${currency}`;
 }
