@@ -173,11 +173,18 @@
   }
 
   /* One visible, consistent focus treatment. Keyboard users get a ring on the
-     accent colour, which clears 3:1 on every surface in both themes. */
+     accent colour, which clears 3:1 on every surface in both themes.
+     Deliberately the ONLY focus indicator: shadcn's primitives ship a second,
+     softer `ring` box-shadow of their own, and the two together read as a halo
+     inside a line. Those are stripped in button.tsx and input.tsx instead of
+     dropping this, because this one rule covers links, table buttons and
+     anything else that never goes through a primitive.
+     It sets no border-radius on purpose — an earlier version pinned 2px here,
+     which squared the corners of every control that had no radius utility of
+     its own. The outline follows each element's own radius. */
   :focus-visible {
     outline: 2px solid var(--budget-accent);
     outline-offset: 2px;
-    border-radius: 2px;
   }
 }
 
