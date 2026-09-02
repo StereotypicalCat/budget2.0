@@ -144,3 +144,81 @@ describe("purchase dates", () => {
     expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/2026-01-32/);
   });
 });
+
+describe("rule versions on import", () => {
+  const pct = (percent: number) => ({ kind: "percentOfIncome" as const, percent });
+
+  test("accepts a well-formed series", () => {
+    const data = populated();
+    data.posts[0]!.rules = [
+      { from: "2026-01", rule: pct(10) },
+      { from: "2026-07", rule: pct(15) },
+    ];
+    expect(() => parseDatasetJson(JSON.stringify(data))).not.toThrow();
+  });
+
+  test("accepts an empty series — an unbudgeted post is legal", () => {
+    const data = populated();
+    data.posts[0]!.rules = [];
+    expect(() => parseDatasetJson(JSON.stringify(data))).not.toThrow();
+  });
+
+  test("rejects a post whose rules is missing or not an array", () => {
+    const data = populated() as any;
+    delete data.posts[0].rules;
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/rules/);
+  });
+
+  test("rejects a malformed from month", () => {
+    const data = populated();
+    data.posts[0]!.rules = [{ from: "2026-1", rule: pct(10) }];
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/2026-1/);
+  });
+
+  test("rejects an out-of-range from month", () => {
+    const data = populated();
+    data.posts[0]!.rules = [{ from: "2026-13", rule: pct(10) }];
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/2026-13/);
+  });
+
+  test("rejects two versions sharing a month, which would be ambiguous", () => {
+    const data = populated();
+    data.posts[0]!.rules = [
+      { from: "2026-04", rule: pct(10) },
+      { from: "2026-04", rule: pct(15) },
+    ];
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/2026-04/);
+  });
+
+  test("does NOT reject a percentage above 100", () => {
+    const data = populated();
+    data.posts[0]!.rules = [{ from: "2026-01", rule: pct(150) }];
+    expect(() => parseDatasetJson(JSON.stringify(data))).not.toThrow();
+  });
+
+  test("does NOT reject a negative fixed amount", () => {
+    const data = populated();
+    data.posts[0]!.rules = [
+      { from: "2026-01", rule: { kind: "fixed", amount: { amount: -500, currency: "DKK" } } },
+    ];
+    expect(() => parseDatasetJson(JSON.stringify(data))).not.toThrow();
+  });
+
+  // Without this, toBase() throws MissingRateError deep inside the balance
+  // fold instead of at the import boundary.
+  test("rejects a fixed rule in an unsupported currency", () => {
+    const data = populated() as any;
+    data.posts[0].rules = [
+      { from: "2026-01", rule: { kind: "fixed", amount: { amount: 500, currency: "XYZ" } } },
+    ];
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/XYZ/);
+  });
+
+  // Without this, resolveRule() falls through to the percentage branch and
+  // every figure downstream of it becomes NaN, silently.
+  test("rejects a rule of an unrecognized kind", () => {
+    const data = populated() as any;
+    data.posts[0].rules = [{ from: "2026-01", rule: { kind: "everySecondTuesday" } }];
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/everySecondTuesday/);
+  });
+});

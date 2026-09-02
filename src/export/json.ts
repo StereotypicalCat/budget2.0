@@ -54,7 +54,8 @@ function requireArray(data: Record<string, unknown>, key: string): unknown[] {
 /**
  * Validates far enough that the fold cannot throw on the imported data: every
  * split points at a real post, every purchase has exactly one remainder
- * absorber, and every MonthId parses.
+ * absorber, every MonthId parses, and every rule version resolves
+ * unambiguously to a number rather than to NaN or a missing rate.
  */
 export function parseDatasetJson(text: string): Dataset {
   let raw: unknown;
@@ -89,6 +90,43 @@ export function parseDatasetJson(text: string): Dataset {
   const postIds = new Set(dataset.posts.map((p) => p.id));
   for (const post of dataset.posts) {
     requireCurrency(post.currency, `post "${post.name}"`);
+
+    const rules = (post as unknown as Record<string, unknown>).rules;
+    if (!Array.isArray(rules)) {
+      throw new ImportValidationError(`Post "${post.name}" is missing its rules array`);
+    }
+    const seenFrom = new Set<string>();
+    for (const version of rules as Array<Record<string, unknown>>) {
+      const from = String(version.from);
+      if (!MONTH_ID.test(from)) {
+        throw new ImportValidationError(
+          `Post "${post.name}" has a rule with an invalid start month "${from}"`,
+        );
+      }
+      if (seenFrom.has(from)) {
+        throw new ImportValidationError(
+          `Post "${post.name}" has two rules starting in "${from}"; the effective rule would be ambiguous`,
+        );
+      }
+      seenFrom.add(from);
+
+      // The rule's VALUE is deliberately unvalidated — a percentage above 100
+      // and a negative amount are both legal. Its SHAPE is not: an unknown
+      // kind falls through resolveRule's percentage branch and turns every
+      // figure after it into NaN, and an unsupported currency throws
+      // MissingRateError deep inside the fold rather than here.
+      const rule = (version.rule ?? {}) as {
+        kind?: unknown;
+        amount?: { currency?: unknown };
+      };
+      if (rule.kind === "fixed") {
+        requireCurrency(rule.amount?.currency, `post "${post.name}" rule from ${from}`);
+      } else if (rule.kind !== "percentOfIncome") {
+        throw new ImportValidationError(
+          `Post "${post.name}" has a rule from "${from}" of unknown kind "${String(rule.kind)}"`,
+        );
+      }
+    }
   }
 
   for (const month of dataset.months) {
