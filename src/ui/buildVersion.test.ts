@@ -11,6 +11,15 @@ test("build.ts's default timestamp becomes a date", () => {
   expect(describeBuild("1788307200000")).toBe("2026-09-02");
 });
 
+test("a commit sha is shortened the way git shortens one", () => {
+  // pages.yml passes BUILD_VERSION: ${{ github.sha }}, so the deployed
+  // colophon was printing all forty characters of
+  // 61e7093c36f9a0111a5f1c8776aba4894c88ebc4.
+  expect(describeBuild("61e7093c36f9a0111a5f1c8776aba4894c88ebc4")).toBe("61e7093");
+  // An already-short sha is left as it is.
+  expect(describeBuild("61e7093")).toBe("61e7093");
+});
+
 test("a version someone chose is printed as given", () => {
   // A sha, a tag and a release number must survive untouched: guessing at a
   // format the builder did not ask for is worse than showing their string.

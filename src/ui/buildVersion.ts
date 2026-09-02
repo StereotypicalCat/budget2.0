@@ -24,6 +24,13 @@ export function readBuildVersionEnv(): string | undefined {
 const EPOCH_MS = /^\d{10,}$/;
 
 /**
+ * A full commit sha. `pages.yml` passes `github.sha`, so the deployed colophon
+ * was printing all forty characters. Requires at least one a-f so a long run of
+ * digits that is not a valid date is never mistaken for one.
+ */
+const LONG_SHA = /^(?=.*[a-f])[0-9a-f]{12,}$/i;
+
+/**
  * `BUILD_VERSION` may be anything the person building chose — a git sha, a tag,
  * a release number — so an unrecognised value is printed as given rather than
  * reformatted into something it is not. The one shape worth translating is
@@ -39,6 +46,7 @@ export function describeBuild(raw: string | undefined): string {
     const at = new Date(Number(raw));
     if (!Number.isNaN(at.getTime())) return at.toISOString().slice(0, 10);
   }
+  if (LONG_SHA.test(raw)) return raw.slice(0, 7);
   return raw;
 }
 
