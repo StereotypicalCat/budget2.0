@@ -61,7 +61,17 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
+          // `grid-cols-[minmax(0,1fr)]` is load-bearing, not tidying. This is a
+          // grid whose single implicit column is `auto`, so it sizes to the
+          // widest child's MIN-content — and one row of the split editor
+          // (a select, an amount, a unit, a radio and a remove button) has a
+          // min-content width of 480px. The column grew past the padding box,
+          // every stretched child grew with it, and so every field in the
+          // purchase dialog sat 17px from the right edge and 25px from the
+          // left. `minmax(0, 1fr)` lets the column shrink to the space the
+          // padding actually leaves, which puts this element's own padding
+          // back in charge of the layout inside it.
+          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className
         )}
         {...props}
