@@ -119,9 +119,13 @@ Genuinely outstanding:
 - **How it looks and feels.** A screenshot proves a layout is not broken. It
   cannot tell you the design is good, and the container's fonts are not the
   owner's fonts.
-- **Offline behaviour**, the **install prompt**, and the **update prompt**. The
-  dev server now serves a deliberately inert `sw.js`, so dev exercises
-  registration but nothing else.
+- **Offline behaviour** and the **install prompt**. The service worker itself
+  is no longer unverified: it demonstrably installs, activates, claims the
+  page, precaches all 11 assets, and applies an update cleanly (`e6da85e`) —
+  before that fix it had never installed once, in any environment, because
+  `cache.addAll` rejects on a duplicate request. What is still unverified is
+  a real offline load with the network actually cut, and Chrome's install
+  prompt appearing.
 - the generated **`.ods` opening in a real spreadsheet** (validated
   structurally: mimetype first and stored, well-formed XML, numeric cells).
 - **keyboard flow in fast entry** — Tab traversal, Backspace-to-remove, and
