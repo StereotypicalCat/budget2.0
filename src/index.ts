@@ -29,6 +29,16 @@ const server = serve({
       new Response(Bun.file(new URL("./icon-512.png", import.meta.url)), {
         headers: { "content-type": "image/png" },
       }),
+    // registerServiceWorker() asks for sw.js on every boot. Without this the
+    // catch-all answers with the HTML shell and the browser logs
+    // "The script has an unsupported MIME type ('text/html')" — caught and
+    // harmless, but noise that hides real errors. A worker that claims no
+    // clients and handles no fetches keeps registration honest in dev without
+    // caching anything, which would fight HMR.
+    [`${basePath}sw.js`]: () =>
+      new Response("/* dev: intentionally does nothing */\n", {
+        headers: { "content-type": "text/javascript", "cache-control": "no-cache" },
+      }),
     "/*": index,
   },
   development: process.env.NODE_ENV !== "production" && {

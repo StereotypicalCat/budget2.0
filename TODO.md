@@ -82,20 +82,25 @@ evidence and anti-reference, not as something to preserve.
 - **The dev-only `src/manifest.webmanifest` placeholder hardcodes `scope: "/"`.**
   Harmless in production, misleading if you dev-serve under a subpath.
 
-## 5. Needs a human with a browser
+## 5. Still needs a human
 
-Nothing in the agent environment can run a browser, so these have never been
-seen by anyone:
+`scripts/screenshot.ts` drives headless Chrome, so the list here is much
+shorter than it was. **Seen and confirmed working:** the carry meter (it
+renders, and shows red where a post is overspent), the rule-history editor in
+Settings, the "change from here" control, the baked FX rates arriving in a
+fresh dataset, and every route at desktop and mobile widths.
 
-- the **carry meter** under each post row in the month view — the signature
-  design element, verified only as a CSS gradient expression;
-- the **rule-history editor** in Settings and the **"change from here"** control
-  in the month view. Their arithmetic is verified through the real fold, and
-  both badge predicates were driven as pure functions, but nobody has seen the
-  expand/collapse, the layout, the disabled states, or the focus order;
-- **offline behaviour**, the **install prompt**, and the **update prompt**;
+Genuinely outstanding:
+
+- **How it looks and feels.** A screenshot proves a layout is not broken. It
+  cannot tell you the design is good, and the container's fonts are not the
+  owner's fonts.
+- **Offline behaviour**, the **install prompt**, and the **update prompt**. The
+  dev server now serves a deliberately inert `sw.js`, so dev exercises
+  registration but nothing else.
 - the generated **`.ods` opening in a real spreadsheet** (validated
-  structurally: mimetype first and stored, well-formed XML, numeric cells);
+  structurally: mimetype first and stored, well-formed XML, numeric cells).
 - **keyboard flow in fast entry** — Tab traversal, Backspace-to-remove, and
-  focus placement after a row auto-appends;
+  focus placement after a row auto-appends. Drivable over CDP in principle;
+  not yet done.
 - **GitHub Actions** has never been executed.

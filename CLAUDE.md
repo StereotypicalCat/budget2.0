@@ -167,9 +167,25 @@ Adding a "missing" guard here is a regression:
 
 ## Verification limits
 
-There is no browser in this environment. Visual appearance, offline behaviour,
-install and update prompts, keyboard focus traversal, and opening the generated
-`.ods` in a spreadsheet **cannot be verified here**. Do not claim you checked
-them. Substitute a real check where one exists — structural validation of the
-`.ods`, curl against the dev server, pure-function tests — and state plainly
-what still needs a human.
+**There IS a browser here.** `google-chrome` is on PATH, and
+`bun scripts/screenshot.ts <url> <out.png>` drives it over CDP: it waits past
+the async IndexedDB read (which plain `--screenshot` does not), can seed data
+with `--eval-file`, click with `--click`, and reports console errors and
+uncaught exceptions. Read the PNG it writes — you can see the app. Use it
+before claiming anything about layout.
+
+Two things to know before trusting a screenshot:
+
+- **This container's fontconfig resolves every generic family to Fira Code, a
+  monospace font**, so the whole UI renders monospaced in a way no real user
+  sees. Point `FONTCONFIG_FILE` at an override that maps the generics to
+  installed sans/mono faces, or you will "fix" a font bug that does not exist.
+- Chrome launches with a fresh profile each run, so IndexedDB starts empty and
+  the app re-seeds. Pass `--eval-file=<seed.js> --reload` for populated data.
+
+Still **not** verifiable here, so do not claim it: real offline behaviour, the
+install and update prompts, opening the generated `.ods` in a spreadsheet, and
+anything about how the design *feels*. A screenshot proves a layout exists and
+is not broken; it does not prove it is good. Substitute a real check where one
+exists — structural validation of the `.ods`, curl against the dev server,
+pure-function tests — and state plainly what still needs a human.

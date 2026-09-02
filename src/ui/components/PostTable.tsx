@@ -67,10 +67,10 @@ export function PostTable({ monthId, baseCurrency, rows, onChangeRule }: Props) 
         <thead className="border-b text-left text-muted-foreground">
           <tr>
             <th className="py-2">Post</th>
-            <th className="py-2 text-right">Carried in</th>
-            <th className="py-2 text-right">Allocated</th>
-            <th className="py-2 text-right">Spent</th>
-            <th className="py-2 text-right">Remaining</th>
+            <th className="py-2 pl-6 text-right">Carried in</th>
+            <th className="py-2 pl-6 text-right">Allocated</th>
+            <th className="py-2 pl-6 text-right">Spent</th>
+            <th className="py-2 pl-6 text-right">Remaining</th>
           </tr>
         </thead>
         <tbody>
@@ -119,7 +119,7 @@ export function PostTable({ monthId, baseCurrency, rows, onChangeRule }: Props) 
                   )}
                 </td>
                 <td
-                  className={`font-money py-2 text-right ${
+                  className={`font-money py-2 pl-6 text-right ${
                     figures.carriedIn > 0
                       ? "text-surplus"
                       : figures.carriedIn < 0
@@ -129,14 +129,14 @@ export function PostTable({ monthId, baseCurrency, rows, onChangeRule }: Props) 
                 >
                   {formatSignedMoney(figures.carriedIn, baseCurrency)}
                 </td>
-                <td className="font-money py-2 text-right">
+                <td className="font-money py-2 pl-6 text-right">
                   {formatMoney(figures.allocation, baseCurrency)}
                 </td>
-                <td className="font-money py-2 text-right">
+                <td className="font-money py-2 pl-6 text-right">
                   {formatMoney(figures.charges, baseCurrency)}
                 </td>
                 <td
-                  className={`font-money py-2 text-right font-medium ${
+                  className={`font-money py-2 pl-6 text-right font-medium ${
                     figures.remaining < 0 ? "text-overspend" : ""
                   }`}
                 >
