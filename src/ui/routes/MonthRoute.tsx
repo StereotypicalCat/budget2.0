@@ -9,11 +9,13 @@ import { monthView } from "../../domain/views.ts";
 import { addMonths } from "../../domain/months.ts";
 import { setIncome, deletePurchase, setRuleFrom } from "../../store/actions.ts";
 import { ruleAt } from "../../domain/allocation.ts";
-import type { MonthId, Post, Rule } from "../../domain/types.ts";
+import type { MonthId, Post, Purchase, Rule } from "../../domain/types.ts";
 import { sliceAmountForMonth } from "../../domain/charges.ts";
 import { formatMoney, formatSignedMoney } from "../format.ts";
 import { PostTable } from "../components/PostTable.tsx";
 import { PurchaseDialog } from "../components/PurchaseDialog.tsx";
+import { Section, Stat } from "../components/Section.tsx";
+import { groupPurchasesByDate } from "../purchaseGroups.ts";
 
 export function MonthRoute() {
   const { monthId = "" } = useParams();
@@ -22,61 +24,62 @@ export function MonthRoute() {
   const view = monthView(dataset, monthId);
   const base = dataset.settings.baseCurrency;
   const [changingRuleFor, setChangingRuleFor] = useState<string | null>(null);
+  const monthPurchases = dataset.purchases.filter(
+    (purchase) => sliceAmountForMonth(purchase, monthId) !== null,
+  );
+  const groups = groupPurchasesByDate(monthPurchases, monthId);
   const changingPost = changingRuleFor
     ? (dataset.posts.find((p) => p.id === changingRuleFor) ?? null)
     : null;
 
   return (
-    <section className="space-y-6">
+    <div className="space-y-5">
       {error && (
-        <div className="flex items-center justify-between rounded border border-destructive p-3 text-sm">
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm"
+        >
           <span>Could not save: {error}</span>
-          <button onClick={clearError} className="underline">
+          <button onClick={clearError} className="underline underline-offset-2">
             dismiss
           </button>
         </div>
       )}
 
-      <header className="flex items-center gap-4">
-        <Link to={`/month/${addMonths(monthId, -1)}`} className="text-sm hover:underline">
-          &larr; {addMonths(monthId, -1)}
-        </Link>
-        <h1 className="text-2xl font-semibold">{monthId}</h1>
-        <Link to={`/month/${addMonths(monthId, 1)}`} className="text-sm hover:underline">
-          {addMonths(monthId, 1)} &rarr;
-        </Link>
+      {/* The month is the app's primary coordinate, so it gets the largest
+          type on the page and the two ways of moving sit either side of it. */}
+      <header className="flex items-baseline gap-3">
+        <MonthStep to={`/month/${addMonths(monthId, -1)}`} label={addMonths(monthId, -1)} back />
+        <h1 className="text-2xl">{monthLabel(monthId)}</h1>
+        <MonthStep to={`/month/${addMonths(monthId, 1)}`} label={addMonths(monthId, 1)} />
       </header>
 
-      <div className="flex flex-wrap items-end gap-6">
-        <div className="space-y-1">
-          <Label htmlFor="income">Income this month ({base})</Label>
-          <Input
-            id="income"
-            type="number"
-            step="0.01"
-            className="font-money w-40"
-            value={view.income}
-            onChange={(event) => {
-              // Read the DOM value NOW: mutate() defers behind the write queue,
-              // by which time React has reset this input to the committed value.
-              const amount = Number(event.target.value) || 0;
-              mutate((draft) => setIncome(draft, monthId, { amount, currency: base }));
-            }}
-          />
-        </div>
-        <dl className="flex gap-6 text-sm">
-          <div>
-            <dt className="text-muted-foreground">Allocated</dt>
-            <dd className="font-money">{formatMoney(view.totalAllocation, base)}</dd>
+      <Section>
+        <div className="flex flex-wrap items-end gap-x-10 gap-y-5">
+          <div className="space-y-1.5">
+            <Label htmlFor="income" className="text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted">
+              Income this month ({base})
+            </Label>
+            <Input
+              id="income"
+              type="number"
+              step="0.01"
+              className="font-money h-10 w-44 text-lg"
+              value={view.income}
+              onChange={(event) => {
+                // Read the DOM value NOW: mutate() defers behind the write queue,
+                // by which time React has reset this input to the committed value.
+                const amount = Number(event.target.value) || 0;
+                mutate((draft) => setIncome(draft, monthId, { amount, currency: base }));
+              }}
+            />
           </div>
-          <div>
-            <dt className="text-muted-foreground">Spent</dt>
-            <dd className="font-money">{formatMoney(view.totalCharges, base)}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Unallocated</dt>
-            <dd
-              className={`font-money ${view.unallocated < 0 ? "text-overspend" : ""}`}
+          <dl className="flex flex-wrap gap-x-10 gap-y-4">
+            <Stat label="Allocated">{formatMoney(view.totalAllocation, base)}</Stat>
+            <Stat label="Spent">{formatMoney(view.totalCharges, base)}</Stat>
+            <Stat
+              label="Unallocated"
+              tone={view.unallocated < 0 ? "overspend" : "default"}
               title={
                 view.unallocated < 0
                   ? "Allocations exceed this month's income. This is allowed."
@@ -84,17 +87,19 @@ export function MonthRoute() {
               }
             >
               {formatSignedMoney(view.unallocated, base)}
-            </dd>
-          </div>
-        </dl>
-      </div>
+            </Stat>
+          </dl>
+        </div>
+      </Section>
 
+      <Section title="Posts" className="overflow-hidden">
       <PostTable
         monthId={monthId}
         baseCurrency={base}
         rows={view.rows}
         onChangeRule={setChangingRuleFor}
       />
+      </Section>
 
       {changingPost && (
         <RuleFromMonth
@@ -109,52 +114,112 @@ export function MonthRoute() {
         />
       )}
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium">Purchases</h2>
-          <PurchaseDialog monthId={monthId} trigger={<Button>Add purchase</Button>} />
-        </div>
-        <ul className="divide-y text-sm">
-          {dataset.purchases
-            .filter((purchase) => sliceAmountForMonth(purchase, monthId) !== null)
-            .map((purchase) => {
-              const slice = sliceAmountForMonth(purchase, monthId)!;
-              return (
-                <li key={purchase.id} className="flex items-center gap-3 py-2">
-                  <span className="flex-1">
-                    {purchase.description}
-                    {purchase.note && (
-                      <span className="ml-2 text-xs text-muted-foreground">{purchase.note}</span>
-                    )}
-                  </span>
-                  {purchase.schedule && (
-                    <span className="text-xs text-muted-foreground">financed</span>
-                  )}
-                  <span className="font-money">
-                    {formatMoney(slice.amount, slice.currency)}
-                  </span>
-                  <PurchaseDialog
-                    monthId={monthId}
-                    purchase={purchase}
-                    trigger={
-                      <Button size="sm" variant="ghost">
-                        edit
-                      </Button>
-                    }
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => mutate((data) => deletePurchase(data, purchase.id))}
-                  >
-                    delete
-                  </Button>
-                </li>
-              );
-            })}
-        </ul>
-      </section>
-    </section>
+      <Section
+        title="Purchases"
+        action={<PurchaseDialog monthId={monthId} trigger={<Button>Add purchase</Button>} />}
+      >
+        {groups.length === 0 ? (
+          <p className="py-1 text-sm text-budget-ink-muted">
+            Nothing recorded for this month yet.
+          </p>
+        ) : (
+          <div className="space-y-3.5">
+            {groups.map((group) => (
+              <div key={group.key}>
+                <h3 className="mb-0.5 text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted">
+                  {group.label}
+                </h3>
+                <ul className="divide-y divide-budget-rule text-sm">
+                  {group.purchases.map((purchase) => (
+                    <PurchaseRow
+                      key={purchase.id}
+                      purchase={purchase}
+                      monthId={monthId}
+                      onDelete={() =>
+                        mutate((data) => deletePurchase(data, purchase.id))
+                      }
+                    />
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+function PurchaseRow({
+  purchase,
+  monthId,
+  onDelete,
+}: {
+  purchase: Purchase;
+  monthId: MonthId;
+  onDelete: () => void;
+}) {
+  const slice = sliceAmountForMonth(purchase, monthId)!;
+  return (
+    <li className="group flex items-center gap-3 rounded-md px-1 py-1.5 transition-colors hover:bg-accent/60">
+      <span className="min-w-0 flex-1 truncate">
+        {purchase.description}
+        {purchase.note && (
+          <span className="ml-2 text-xs text-budget-ink-muted">{purchase.note}</span>
+        )}
+      </span>
+      {purchase.schedule && (
+        <span className="shrink-0 rounded-full border border-budget-rule px-1.5 py-px text-[0.625rem] uppercase tracking-wide text-budget-ink-muted">
+          financed
+        </span>
+      )}
+      <span className="font-money shrink-0 tabular-nums">
+        {formatMoney(slice.amount, slice.currency)}
+      </span>
+      {/* Held at a fixed width so revealing the actions on hover cannot shift
+          the amounts, which are the column being read down. */}
+      <span className="flex w-[7.5rem] shrink-0 justify-end gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <PurchaseDialog
+          monthId={monthId}
+          purchase={purchase}
+          trigger={
+            <Button size="sm" variant="ghost">
+              edit
+            </Button>
+          }
+        />
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-overspend hover:text-overspend"
+          onClick={onDelete}
+        >
+          delete
+        </Button>
+      </span>
+    </li>
+  );
+}
+
+/** "2026-09" reads as a key; "September 2026" reads as a month. */
+function monthLabel(monthId: MonthId): string {
+  const [year, month] = monthId.split("-");
+  const names = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  const name = names[Number(month) - 1];
+  return name ? `${name} ${year}` : monthId;
+}
+
+function MonthStep({ to, label, back = false }: { to: string; label: string; back?: boolean }) {
+  return (
+    <Link
+      to={to}
+      className="font-money rounded-md px-1.5 py-0.5 text-xs text-budget-ink-muted transition-colors hover:bg-accent hover:text-budget-ink"
+    >
+      {back ? `\u2190 ${label}` : `${label} \u2192`}
+    </Link>
   );
 }
 

@@ -2,10 +2,71 @@ import tailwind from "bun-plugin-tailwind";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { normalizeBase } from "./src/ui/basePath.ts";
+import { buildManifest } from "./src/manifest.ts";
+import { FONT_FILES } from "./src/fontCss.ts";
+import { buildFxUrl, parseFxResponse, DEFAULT_FX_API_URL } from "./src/store/fxApi.ts";
+import { FALLBACK_FX_RATES } from "./src/store/bakedRates.ts";
+import type { Currency, FxRate } from "./src/domain/types.ts";
 
 const basePath = normalizeBase(process.env.BUN_PUBLIC_BASE_PATH);
 const outdir = path.join(process.cwd(), "dist");
 const version = process.env.BUILD_VERSION ?? String(Date.now());
+
+const FX_BASE: Currency = "DKK";
+const FX_TARGETS: Currency[] = ["USD", "EUR"];
+const FX_TIMEOUT_MS = 8_000;
+
+/**
+ * Exchange rates embedded at build time so a fresh install can convert a EUR
+ * purchase on day one instead of erroring. They seed a new dataset only — see
+ * src/store/bakedRates.ts for why they must never backstop a missing rate.
+ *
+ * A network failure must NOT fail the build: it falls back to the committed
+ * constants, which are labelled "manual" so Settings never claims a hardcoded
+ * number came from a rate service. Fetched rates carry the build date rather
+ * than the date the browser happens to run, which is why parseFxResponse
+ * takes an explicit `updatedAt`.
+ *
+ * SKIP_FX_FETCH=1 forces the constants, for offline or reproducible builds.
+ * FX_API_URL overrides the endpoint.
+ */
+async function bakeFxRates(): Promise<readonly FxRate[]> {
+  const buildDate = new Date().toISOString().slice(0, 10);
+  const describe = (rates: readonly FxRate[]) =>
+    rates.map((r) => `${r.currency} ${r.baseUnitsPerOne}`).join(", ");
+
+  if (process.env.SKIP_FX_FETCH === "1") {
+    console.log(`Baking the committed FX constants (SKIP_FX_FETCH=1): ${describe(FALLBACK_FX_RATES)}`);
+    return FALLBACK_FX_RATES;
+  }
+
+  const template = process.env.FX_API_URL ?? DEFAULT_FX_API_URL;
+  try {
+    const response = await fetch(buildFxUrl(template, FX_BASE, FX_TARGETS), {
+      signal: AbortSignal.timeout(FX_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(`rate service returned ${response.status}`);
+
+    const rates = parseFxResponse(await response.json(), FX_BASE, FX_TARGETS, buildDate);
+    // A partial response would leave one currency unconvertible on a fresh
+    // install, which is the whole problem this solves. Prefer the complete
+    // constants over an incomplete live answer.
+    const covered = new Set(rates.map((r) => r.currency));
+    const missing = FX_TARGETS.filter((c) => !covered.has(c));
+    if (missing.length > 0) throw new Error(`response omitted ${missing.join(", ")}`);
+
+    console.log(`Baked live FX rates for ${buildDate}: ${describe(rates)}`);
+    return rates;
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    console.warn(
+      `Could not fetch FX rates (${message}); baking the committed constants instead: ${describe(FALLBACK_FX_RATES)}`,
+    );
+    return FALLBACK_FX_RATES;
+  }
+}
+
+const bakedFxRates = await bakeFxRates();
 
 await rm(outdir, { recursive: true, force: true });
 
@@ -43,6 +104,9 @@ const result = await Bun.build({
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
     "process.env.BUN_PUBLIC_BASE_PATH": JSON.stringify(basePath),
+    // Double-encoded on purpose: the inlined literal must be a JSON *string*
+    // for parseBakedRates to parse at runtime.
+    "process.env.BUN_PUBLIC_BAKED_FX_RATES": JSON.stringify(JSON.stringify(bakedFxRates)),
   },
 });
 
@@ -51,11 +115,28 @@ if (!result.success) {
   throw new Error("Build failed");
 }
 
+/**
+ * Written to dist below rather than emitted by the bundler, so they are absent
+ * from `result.outputs` and have to be listed for the precache by name.
+ * Without them an installed app cannot render its own icon offline, and the
+ * manifest 404s.
+ */
+const STATIC_ASSETS = [
+  "manifest.webmanifest",
+  "icon.svg",
+  "icon-192.png",
+  "icon-512.png",
+  ...FONT_FILES.map((file) => `fonts/${file}`),
+];
+
 // The precache list comes from the build's own outputs, so hashed filenames can
 // never drift out of sync with the service worker.
-const precache = result.outputs
-  .filter((output) => !output.path.endsWith(".map"))
-  .map((output) => basePath + path.relative(outdir, output.path).replaceAll(path.sep, "/"));
+const precache = [
+  ...result.outputs
+    .filter((output) => !output.path.endsWith(".map"))
+    .map((output) => basePath + path.relative(outdir, output.path).replaceAll(path.sep, "/")),
+  ...STATIC_ASSETS.map((file) => basePath + file),
+];
 
 const swResult = await Bun.build({
   entrypoints: ["src/sw.ts"],
@@ -75,25 +156,17 @@ if (!swResult.success) {
   throw new Error("Service worker build failed");
 }
 
-export function buildManifest(base: string): string {
-  return JSON.stringify(
-    {
-      name: "Budget 2.0",
-      short_name: "Budget",
-      start_url: base,
-      scope: base,
-      display: "standalone",
-      background_color: "#0f172a",
-      theme_color: "#0f172a",
-      icons: [{ src: `${base}icon.svg`, sizes: "any", type: "image/svg+xml" }],
-    },
-    null,
-    2,
-  );
-}
-
 await Bun.write(path.join(outdir, "manifest.webmanifest"), buildManifest(basePath));
 await Bun.write(path.join(outdir, "icon.svg"), Bun.file("src/icon.svg"));
+for (const size of [192, 512]) {
+  await Bun.write(
+    path.join(outdir, `icon-${size}.png`),
+    Bun.file(`src/icon-${size}.png`),
+  );
+}
+for (const file of FONT_FILES) {
+  await Bun.write(path.join(outdir, "fonts", file), Bun.file(`src/fonts/${file}`));
+}
 
 // This is an SPA: every route serves the same shell, so the *document* URL
 // can be several segments deep (e.g. /budget2.0/month/2026-09). Relative
@@ -105,9 +178,14 @@ await Bun.write(path.join(outdir, "icon.svg"), Bun.file("src/icon.svg"));
 // rather than hardcoded in src/index.html so the dev server (which always
 // serves from "/") keeps working unchanged.
 let indexHtml = await Bun.file(path.join(outdir, "index.html")).text();
-indexHtml = indexHtml
-  .replace('href="manifest.webmanifest"', `href="${basePath}manifest.webmanifest"`)
-  .replace('href="icon.svg"', `href="${basePath}icon.svg"`);
+// src/index.html references these relatively, because the dev server's HTML
+// bundler resolves every <link href> from disk and cannot be told to skip an
+// absolute one. Relative hrefs would 404 on any route deeper than the base
+// (/budget2.0/month/2026-09 resolves them against /budget2.0/month/), so
+// rewrite them absolute here. At "/" each replacement is a no-op.
+for (const asset of ["manifest.webmanifest", "icon.svg"]) {
+  indexHtml = indexHtml.replace(`href="${asset}"`, `href="${basePath}${asset}"`);
+}
 await Bun.write(path.join(outdir, "index.html"), indexHtml);
 
 // GitHub Pages has no rewrite rules, so a deep link on a cold load lands on

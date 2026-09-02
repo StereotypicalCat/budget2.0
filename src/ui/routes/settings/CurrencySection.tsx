@@ -1,12 +1,21 @@
 import { useState } from "react";
+import { Section } from "../../components/Section.tsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDataset } from "../../hooks/useDataset.ts";
 import { useMutate } from "../../hooks/useMutate.ts";
-import { setBaseCurrency, setFxRate, removeFxRate } from "../../../store/actions.ts";
+import {
+  addCurrency,
+  removeCurrency,
+  setBaseCurrency,
+  setFxRate,
+  removeFxRate,
+  updateCurrency,
+} from "../../../store/actions.ts";
 import { DEFAULT_FX_API_URL, fetchFxRates } from "../../../store/fxApi.ts";
-import { CURRENCIES, type Currency } from "../../../domain/types.ts";
+import { currencyUsage } from "../../../domain/currencies.ts";
+import type { Currency } from "../../../domain/types.ts";
 
 export function CurrencySection() {
   const dataset = useDataset();
@@ -14,7 +23,8 @@ export function CurrencySection() {
   const base = dataset.settings.baseCurrency;
   const apiUrl = dataset.settings.fxApiUrl ?? DEFAULT_FX_API_URL;
   const [status, setStatus] = useState<string | null>(null);
-  const targets = CURRENCIES.filter((c) => c !== base);
+  const [error, setError] = useState<string | null>(null);
+  const targets = dataset.currencies.map((c) => c.code).filter((c) => c !== base);
 
   async function refresh() {
     setStatus("Fetching…");
@@ -23,95 +33,198 @@ export function CurrencySection() {
       mutate((draft) => {
         for (const rate of rates) setFxRate(draft, rate);
       });
-      setStatus(`Updated ${rates.length} rate(s).`);
-    } catch (error) {
+      const missing = targets.filter((t) => !rates.some((r) => r.currency === t));
+      setStatus(
+        `Updated ${rates.length} rate(s).` +
+          (missing.length > 0
+            ? ` The service returned nothing for ${missing.join(", ")} — type those in by hand.`
+            : ""),
+      );
+    } catch (cause) {
       // Fails soft: the cached rates are still in place, never cleared.
       setStatus(
         `Could not fetch rates (${
-          error instanceof Error ? error.message : String(error)
+          cause instanceof Error ? cause.message : String(cause)
         }). Your saved rates are unchanged.`,
       );
     }
   }
 
-  return (
-    <section className="space-y-4">
-      <h2 className="text-lg font-medium">Currency</h2>
+  /** Currency edits throw on bad input, and a throw from a handler is invisible. */
+  function tryEdit(change: () => void) {
+    try {
+      setError(null);
+      change();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
 
-      <div className="space-y-1">
-        <Label htmlFor="base-currency">Base currency (all totals use this)</Label>
+  return (
+    <Section
+      title="Currencies"
+      hint="Add any currency you spend in. The code is how it is identified, so it cannot be changed later — and everything is converted to the base currency for totals."
+    >
+      {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+
+      <div className="mb-5 space-y-1.5">
+        <Label
+          htmlFor="base-currency"
+          className="text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted"
+        >
+          Base currency (all totals use this)
+        </Label>
         <select
           id="base-currency"
-          className="h-9 w-32 rounded border bg-background px-2 text-sm"
+          className="h-9 w-40 rounded-md border border-input bg-background px-2 text-sm"
           value={base}
           onChange={(event) => {
-            const currency = event.target.value as Currency;
+            const currency = event.target.value;
             mutate((draft) => setBaseCurrency(draft, currency));
           }}
         >
-          {CURRENCIES.map((currency) => (
-            <option key={currency} value={currency}>
-              {currency}
+          {dataset.currencies.map(({ code }) => (
+            <option key={code} value={code}>
+              {code}
             </option>
           ))}
         </select>
       </div>
 
-      <table className="w-full max-w-md text-sm">
-        <thead className="border-b text-left text-muted-foreground">
-          <tr>
-            <th className="py-2">Currency</th>
-            <th className="py-2 text-right">1 unit = ? {base}</th>
-            <th className="py-2 text-right">Source</th>
-          </tr>
-        </thead>
-        <tbody>
-          {targets.map((currency) => {
-            const rate = dataset.fxRates.find((r) => r.currency === currency);
-            return (
-              <tr key={currency} className="border-b last:border-0">
-                <td className="py-2">{currency}</td>
-                <td className="py-2 text-right">
-                  <Input
-                    type="number"
-                    step="0.000001"
-                    className="font-money ml-auto h-8 w-32"
-                    value={rate?.baseUnitsPerOne ?? ""}
-                    onChange={(event) => {
-                      // A cleared or non-positive field MUST remove the rate
-                      // row rather than store 0: toBase() converts a stored 0
-                      // silently to a 0-value conversion, while an absent row
-                      // correctly throws MissingRateError. Storing 0 here
-                      // would turn a loud, correct error into wrong numbers
-                      // presented as fact.
-                      const parsed = Number(event.target.value);
-                      mutate((draft) => {
-                        if (Number.isFinite(parsed) && parsed > 0) {
-                          setFxRate(draft, {
-                            currency,
-                            baseUnitsPerOne: parsed,
-                            updatedAt: new Date().toISOString(),
-                            source: "manual",
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[42rem] text-sm">
+          <thead className="text-left">
+            <tr className="border-b border-budget-rule text-[0.6875rem] uppercase tracking-wider text-budget-ink-muted">
+              <th className="py-2 font-medium">Code</th>
+              <th className="py-2 pl-4 font-medium">Name</th>
+              <th className="py-2 pl-4 font-medium">Symbol</th>
+              <th className="py-2 pl-4 text-right font-medium">Decimals</th>
+              <th className="py-2 pl-4 text-right font-medium">1 unit = ? {base}</th>
+              <th className="py-2 pl-4 text-right font-medium">Source</th>
+              <th className="py-2 pl-4" />
+            </tr>
+          </thead>
+          <tbody>
+            {dataset.currencies.map((currency) => {
+              const isBase = currency.code === base;
+              const rate = dataset.fxRates.find((r) => r.currency === currency.code);
+              const used = currencyUsage(dataset, currency.code);
+              return (
+                <tr
+                  key={currency.code}
+                  className="group border-b border-budget-rule transition-colors last:border-0 hover:bg-accent/60"
+                >
+                  <td className="font-money py-2 font-medium">{currency.code}</td>
+                  <td className="py-2 pl-4">
+                    <Input
+                      className="h-8 w-40"
+                      aria-label={`Name for ${currency.code}`}
+                      value={currency.name ?? ""}
+                      onChange={(event) => {
+                        const name = event.target.value;
+                        mutate((draft) => updateCurrency(draft, currency.code, { name }));
+                      }}
+                    />
+                  </td>
+                  <td className="py-2 pl-4">
+                    <Input
+                      className="font-money h-8 w-16"
+                      aria-label={`Symbol for ${currency.code}`}
+                      value={currency.symbol ?? ""}
+                      onChange={(event) => {
+                        const symbol = event.target.value;
+                        mutate((draft) => updateCurrency(draft, currency.code, { symbol }));
+                      }}
+                    />
+                  </td>
+                  <td className="py-2 pl-4 text-right">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="4"
+                      step="1"
+                      className="font-money ml-auto h-8 w-16 text-right"
+                      aria-label={`Decimal places for ${currency.code}`}
+                      value={currency.digits}
+                      onChange={(event) => {
+                        const digits = Number(event.target.value);
+                        if (!Number.isInteger(digits) || digits < 0 || digits > 4) return;
+                        mutate((draft) => updateCurrency(draft, currency.code, { digits }));
+                      }}
+                    />
+                  </td>
+                  <td className="py-2 pl-4 text-right">
+                    {isBase ? (
+                      <span className="font-money text-budget-ink-muted">1</span>
+                    ) : (
+                      <Input
+                        type="number"
+                        step="0.000001"
+                        className="font-money ml-auto h-8 w-32 text-right"
+                        aria-label={`Rate for ${currency.code}`}
+                        value={rate?.baseUnitsPerOne ?? ""}
+                        onChange={(event) => {
+                          // A cleared or non-positive field MUST remove the rate
+                          // row rather than store 0: toBase() converts a stored 0
+                          // silently to a 0-value conversion, while an absent row
+                          // correctly throws MissingRateError. Storing 0 here
+                          // would turn a loud, correct error into wrong numbers
+                          // presented as fact.
+                          const parsed = Number(event.target.value);
+                          mutate((draft) => {
+                            if (Number.isFinite(parsed) && parsed > 0) {
+                              setFxRate(draft, {
+                                currency: currency.code,
+                                baseUnitsPerOne: parsed,
+                                updatedAt: new Date().toISOString(),
+                                source: "manual",
+                              });
+                            } else {
+                              removeFxRate(draft, currency.code);
+                            }
                           });
-                        } else {
-                          removeFxRate(draft, currency);
-                        }
-                      });
-                    }}
-                  />
-                </td>
-                <td className="py-2 text-right text-xs text-muted-foreground">
-                  {rate ? `${rate.source} · ${rate.updatedAt.slice(0, 10)}` : "not set"}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                        }}
+                      />
+                    )}
+                  </td>
+                  <td className="py-2 pl-4 text-right text-xs text-budget-ink-muted">
+                    {isBase ? "—" : rate ? `${rate.source} · ${rate.updatedAt.slice(0, 10)}` : "not set"}
+                  </td>
+                  <td className="py-2 pl-4 text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-overspend hover:text-overspend disabled:opacity-40"
+                      disabled={used.length > 0}
+                      title={
+                        used.length > 0
+                          ? `In use by ${used.slice(0, 3).join(", ")}${used.length > 3 ? ` and ${used.length - 3} more` : ""}`
+                          : `Remove ${currency.code}`
+                      }
+                      onClick={() =>
+                        tryEdit(() => mutate((draft) => removeCurrency(draft, currency.code)))
+                      }
+                    >
+                      remove
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-      <div className="space-y-2">
-        <div className="space-y-1">
-          <Label htmlFor="fx-url">Rate service URL</Label>
+      <AddCurrency onAdd={(def) => tryEdit(() => mutate((draft) => addCurrency(draft, def)))} />
+
+      <div className="mt-5 space-y-2 border-t border-budget-rule pt-5">
+        <div className="space-y-1.5">
+          <Label
+            htmlFor="fx-url"
+            className="text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted"
+          >
+            Rate service URL
+          </Label>
           <Input
             id="fx-url"
             className="max-w-xl"
@@ -123,16 +236,102 @@ export function CurrencySection() {
               });
             }}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-budget-ink-muted">
             {"{base}"} and {"{targets}"} are substituted. Fetching is optional — the app
-            works offline with the rates you type in above.
+            works offline with the rates you type in above, and a currency the service
+            does not know can always be maintained by hand.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void refresh()}>
           Fetch rates now
         </Button>
-        {status && <p className="text-xs">{status}</p>}
+        {status && <p className="text-xs text-budget-ink-muted">{status}</p>}
       </div>
-    </section>
+    </Section>
+  );
+}
+
+/**
+ * Decimals default to 2 because almost every currency uses hundredths; the
+ * field is there for the ones that do not (yen at 0, dinars at 3).
+ */
+function AddCurrency({ onAdd }: { onAdd: (def: { code: Currency; digits: number; symbol?: string; name?: string }) => void }) {
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [symbol, setSymbol] = useState("");
+  const [digits, setDigits] = useState("2");
+
+  const parsedDigits = Number(digits);
+  const canAdd =
+    /^[A-Za-z]{2,8}$/.test(code.trim()) &&
+    Number.isInteger(parsedDigits) &&
+    parsedDigits >= 0 &&
+    parsedDigits <= 4;
+
+  function add() {
+    onAdd({ code: code.trim(), digits: parsedDigits, symbol, name });
+    setCode("");
+    setName("");
+    setSymbol("");
+    setDigits("2");
+  }
+
+  return (
+    <div className="mt-4 flex flex-wrap items-end gap-2">
+      <Input
+        className="font-money h-9 w-24 uppercase"
+        placeholder="JPY"
+        aria-label="New currency code"
+        value={code}
+        onChange={(event) => {
+          const next = event.target.value;
+          setCode(next);
+        }}
+      />
+      <Input
+        className="h-9 w-44"
+        placeholder="Japanese yen"
+        aria-label="New currency name"
+        value={name}
+        onChange={(event) => {
+          const next = event.target.value;
+          setName(next);
+        }}
+      />
+      <Input
+        className="font-money h-9 w-16"
+        placeholder="¥"
+        aria-label="New currency symbol"
+        value={symbol}
+        onChange={(event) => {
+          const next = event.target.value;
+          setSymbol(next);
+        }}
+      />
+      <div className="space-y-1">
+        <Label
+          htmlFor="new-digits"
+          className="text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted"
+        >
+          Decimals
+        </Label>
+        <Input
+          id="new-digits"
+          type="number"
+          min="0"
+          max="4"
+          step="1"
+          className="font-money h-9 w-16 text-right"
+          value={digits}
+          onChange={(event) => {
+            const next = event.target.value;
+            setDigits(next);
+          }}
+        />
+      </div>
+      <Button variant="outline" disabled={!canAdd} onClick={add}>
+        Add currency
+      </Button>
+    </div>
   );
 }

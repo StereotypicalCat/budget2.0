@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useDataset } from "../hooks/useDataset.ts";
 import { datasetMonthSpan, summaryView } from "../../domain/views.ts";
 import { formatAmount, formatMoney } from "../format.ts";
+import { Section, Stat } from "../components/Section.tsx";
 
 export function SummaryRoute() {
   const dataset = useDataset();
@@ -19,9 +20,10 @@ export function SummaryRoute() {
   const difference = Number((view.totalIncome - view.totalCharges).toFixed(2));
 
   return (
-    <section className="space-y-6">
-      <h1 className="text-2xl font-semibold">Summary</h1>
+    <div className="space-y-5">
+      <h1 className="text-2xl">Summary</h1>
 
+      <Section>
       <div className="flex flex-wrap items-end gap-4">
         <div className="space-y-1">
           <Label htmlFor="from">From</Label>
@@ -41,52 +43,49 @@ export function SummaryRoute() {
         >
           All time
         </Button>
-        <div className="ml-auto flex gap-1">
-          {(["post", "month"] as const).map((option) => (
-            <Button
-              key={option}
-              size="sm"
-              variant={groupBy === option ? "default" : "outline"}
-              onClick={() => setGroupBy(option)}
-            >
-              by {option}
-            </Button>
-          ))}
-        </div>
       </div>
 
-      <dl className="flex gap-6 text-sm">
-        <div>
-          <dt className="text-muted-foreground">Income</dt>
-          <dd className="font-money">{formatMoney(view.totalIncome, base)}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Spent</dt>
-          <dd className="font-money">{formatMoney(view.totalCharges, base)}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Difference</dt>
-          <dd className={`font-money ${difference < 0 ? "text-overspend" : ""}`}>
-            {formatMoney(difference, base)}
-          </dd>
-        </div>
+      <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-4 border-t border-budget-rule pt-5">
+        <Stat label="Income">{formatMoney(view.totalIncome, base)}</Stat>
+        <Stat label="Spent">{formatMoney(view.totalCharges, base)}</Stat>
+        <Stat label="Difference" tone={difference < 0 ? "overspend" : "default"}>
+          {formatMoney(difference, base)}
+        </Stat>
       </dl>
+      </Section>
 
+      <Section
+        title={groupBy === "post" ? "By post" : "By month"}
+        action={
+          <div className="flex gap-1">
+            {(["post", "month"] as const).map((option) => (
+              <Button
+                key={option}
+                size="sm"
+                variant={groupBy === option ? "default" : "outline"}
+                onClick={() => setGroupBy(option)}
+              >
+                by {option}
+              </Button>
+            ))}
+          </div>
+        }
+      >
       <table className="w-full text-sm">
-        <thead className="border-b text-left text-muted-foreground">
-          <tr>
-            <th className="py-2">{groupBy === "post" ? "Post" : "Month"}</th>
-            <th className="py-2 text-right">Spent</th>
-            <th className="py-2 text-right">Share</th>
+        <thead className="text-left">
+          <tr className="border-b border-budget-rule text-[0.6875rem] uppercase tracking-wider text-budget-ink-muted">
+            <th className="py-2 font-medium">{groupBy === "post" ? "Post" : "Month"}</th>
+            <th className="py-2 pl-6 text-right font-medium">Spent</th>
+            <th className="py-2 pl-6 text-right font-medium">Share</th>
           </tr>
         </thead>
         <tbody>
           {groupBy === "post"
             ? view.byPost.map((entry) => (
-                <tr key={entry.post.id} className="border-b last:border-0">
-                  <td className="py-2">{entry.post.name}</td>
-                  <td className="py-2 text-right font-money">{formatAmount(entry.charges)}</td>
-                  <td className="py-2 text-right font-money text-muted-foreground">
+                <tr key={entry.post.id} className="border-b border-budget-rule transition-colors last:border-0 hover:bg-accent/60">
+                  <td className="py-2.5">{entry.post.name}</td>
+                  <td className="font-money py-2.5 pl-6 text-right">{formatAmount(entry.charges)}</td>
+                  <td className="font-money py-2.5 pl-6 text-right text-budget-ink-muted">
                     {view.totalCharges === 0
                       ? "—"
                       : `${((entry.charges / view.totalCharges) * 100).toFixed(1)}%`}
@@ -94,14 +93,14 @@ export function SummaryRoute() {
                 </tr>
               ))
             : view.byMonth.map((entry) => (
-                <tr key={entry.monthId} className="border-b last:border-0">
+                <tr key={entry.monthId} className="border-b border-budget-rule transition-colors last:border-0 hover:bg-accent/60">
                   <td className="py-2">
                     <Link to={`/month/${entry.monthId}`} className="hover:underline">
                       {entry.monthId}
                     </Link>
                   </td>
-                  <td className="py-2 text-right font-money">{formatAmount(entry.charges)}</td>
-                  <td className="py-2 text-right font-money text-muted-foreground">
+                  <td className="font-money py-2.5 pl-6 text-right">{formatAmount(entry.charges)}</td>
+                  <td className="font-money py-2.5 pl-6 text-right text-budget-ink-muted">
                     {view.totalCharges === 0
                       ? "—"
                       : `${((entry.charges / view.totalCharges) * 100).toFixed(1)}%`}
@@ -110,6 +109,7 @@ export function SummaryRoute() {
               ))}
         </tbody>
       </table>
-    </section>
+      </Section>
+    </div>
   );
 }

@@ -1,8 +1,10 @@
 import { newId } from "../domain/seed.ts";
 import { compareMonths, monthOf } from "../domain/months.ts";
 import { roundMoney } from "../domain/money.ts";
+import { currencyUsage, digitsFor, normalizeCurrencyCode } from "../domain/currencies.ts";
 import type {
   Currency,
+  CurrencyDef,
   Dataset,
   FxRate,
   Money,
@@ -46,28 +48,47 @@ function round2(value: number): number {
   return Number(value.toFixed(2));
 }
 
-function roundMoneyValue(money: Money): Money {
-  return { amount: roundMoney(money.amount, money.currency), currency: money.currency };
+function roundMoneyValue(draft: Dataset, money: Money): Money {
+  return {
+    amount: roundMoney(money.amount, digitsFor(draft.currencies, money.currency)),
+    currency: money.currency,
+  };
 }
 
-function roundRule(rule: Rule): Rule {
+function roundRule(draft: Dataset, rule: Rule): Rule {
   if (rule.kind === "fixed") {
-    return { kind: "fixed", amount: roundMoneyValue(rule.amount) };
+    return { kind: "fixed", amount: roundMoneyValue(draft, rule.amount) };
   }
   return { kind: "percentOfIncome", percent: round2(rule.percent) };
 }
 
-function roundSplits(splits: Split[]): Split[] {
-  return splits.map((split) => ({ ...split, value: round2(split.value) }));
+/**
+ * A split's `value` is a percentage in "percent" mode and MONEY in the
+ * purchase's currency in "fixed" mode, so the two round differently: a
+ * percentage to 2 decimals, money to its currency's minor unit. Rounding
+ * both to a hardcoded 2 places is correct only while every supported
+ * currency happens to use hundredths.
+ */
+function roundSplits(
+  draft: Dataset,
+  splits: Split[],
+  splitMode: Purchase["splitMode"],
+  currency: Currency,
+): Split[] {
+  const digits = digitsFor(draft.currencies, currency);
+  return splits.map((split) => ({
+    ...split,
+    value: splitMode === "fixed" ? roundMoney(split.value, digits) : round2(split.value),
+  }));
 }
 
-function roundSchedule(schedule: Schedule | null): Schedule | null {
+function roundSchedule(draft: Dataset, schedule: Schedule | null): Schedule | null {
   if (!schedule) return null;
   return {
     ...schedule,
     slices: schedule.slices.map((slice) => ({
       month: slice.month,
-      amount: roundMoneyValue(slice.amount),
+      amount: roundMoneyValue(draft, slice.amount),
     })),
   };
 }
@@ -86,7 +107,7 @@ export function ensureMonth(draft: Dataset, monthId: MonthId): Month {
 }
 
 export function setIncome(draft: Dataset, monthId: MonthId, income: Money): void {
-  ensureMonth(draft, monthId).income = roundMoneyValue(income);
+  ensureMonth(draft, monthId).income = roundMoneyValue(draft, income);
 }
 
 export function setRuleOverride(
@@ -100,7 +121,7 @@ export function setRuleOverride(
     delete month.ruleOverrides[postId];
     return;
   }
-  month.ruleOverrides[postId] = roundRule(rule);
+  month.ruleOverrides[postId] = roundRule(draft, rule);
 }
 
 export function addPost(draft: Dataset, name: string, currency: Currency): Post {
@@ -158,7 +179,7 @@ export function setRuleFrom(
   rule: Rule,
 ): void {
   const post = requirePost(draft, postId);
-  const version: RuleVersion = { from, rule: roundRule(rule) };
+  const version: RuleVersion = { from, rule: roundRule(draft, rule) };
   const existing = post.rules.findIndex((v) => v.from === from);
   if (existing === -1) post.rules.push(version);
   else post.rules[existing] = version;
@@ -181,9 +202,9 @@ export function addPurchase(
   const created: Purchase = {
     ...purchase,
     id: newId(),
-    total: roundMoneyValue(purchase.total),
-    splits: roundSplits(purchase.splits),
-    schedule: roundSchedule(purchase.schedule),
+    total: roundMoneyValue(draft, purchase.total),
+    splits: roundSplits(draft, purchase.splits, purchase.splitMode, purchase.total.currency),
+    schedule: roundSchedule(draft, purchase.schedule),
   };
   draft.purchases.push(created);
   // Make sure every month the purchase touches exists, so income can be
@@ -203,13 +224,21 @@ export function updatePurchase(
   const purchase = requirePurchase(draft, purchaseId);
   const resolved: Partial<Omit<Purchase, "id">> = { ...changes };
   if (changes.total) {
-    resolved.total = roundMoneyValue(changes.total);
+    resolved.total = roundMoneyValue(draft, changes.total);
   }
   if (changes.splits) {
-    resolved.splits = roundSplits(changes.splits);
+    // Either field may be absent from a partial update; the stored purchase
+    // supplies whichever one is, so the mode and currency always agree with
+    // the values being rounded.
+    resolved.splits = roundSplits(
+      draft,
+      changes.splits,
+      changes.splitMode ?? purchase.splitMode,
+      (resolved.total ?? purchase.total).currency,
+    );
   }
   if (changes.schedule !== undefined) {
-    resolved.schedule = roundSchedule(changes.schedule);
+    resolved.schedule = roundSchedule(draft, changes.schedule);
   }
   Object.assign(purchase, resolved);
 }
@@ -235,6 +264,67 @@ export function cancelScheduleFrom(
  * kept at six decimal places (see fxApi.ts's toFixed(6)), and rounding to a
  * currency's minor unit would quantize a rate below 0.01 straight to zero.
  */
+/** Codes are identity, so they are validated the same way on every path. */
+const CURRENCY_CODE = /^[A-Z]{2,8}$/;
+
+function requireCurrencyDef(def: CurrencyDef): CurrencyDef {
+  const code = normalizeCurrencyCode(def.code);
+  if (!CURRENCY_CODE.test(code)) {
+    throw new Error(`Currency code "${def.code}" must be 2-8 letters`);
+  }
+  if (!Number.isInteger(def.digits) || def.digits < 0 || def.digits > 4) {
+    throw new Error(
+      `Currency "${code}" needs a whole number of decimal places between 0 and 4`,
+    );
+  }
+  return {
+    code,
+    digits: def.digits,
+    ...(def.symbol?.trim() ? { symbol: def.symbol.trim() } : {}),
+    ...(def.name?.trim() ? { name: def.name.trim() } : {}),
+  };
+}
+
+export function addCurrency(draft: Dataset, def: CurrencyDef): CurrencyDef {
+  const currency = requireCurrencyDef(def);
+  if (draft.currencies.some((existing) => existing.code === currency.code)) {
+    throw new Error(`Currency ${currency.code} is already defined`);
+  }
+  draft.currencies.push(currency);
+  return currency;
+}
+
+export function updateCurrency(
+  draft: Dataset,
+  code: Currency,
+  changes: Partial<Omit<CurrencyDef, "code">>,
+): void {
+  const existing = draft.currencies.find((currency) => currency.code === code);
+  if (!existing) throw new Error(`Unknown currency: ${code}`);
+  // The code is identity — it keys the FX table and every stored Money — so it
+  // is deliberately not editable. Renaming one means adding the new code,
+  // moving what refers to it, and removing the old.
+  Object.assign(existing, requireCurrencyDef({ ...existing, ...changes, code }));
+}
+
+/**
+ * Refuses to remove a currency anything still refers to, naming what refers to
+ * it. Its exchange rate goes with it, so no orphan row survives.
+ */
+export function removeCurrency(draft: Dataset, code: Currency): void {
+  const used = currencyUsage(draft, code);
+  if (used.length > 0) {
+    const isBase = draft.settings.baseCurrency === code;
+    throw new Error(
+      isBase
+        ? `${code} is the base currency; choose another base before removing it`
+        : `${code} is in use by ${used.slice(0, 3).join(", ")}${used.length > 3 ? ` and ${used.length - 3} more` : ""}`,
+    );
+  }
+  draft.currencies = draft.currencies.filter((currency) => currency.code !== code);
+  draft.fxRates = draft.fxRates.filter((rate) => rate.currency !== code);
+}
+
 export function setFxRate(draft: Dataset, rate: FxRate): void {
   const index = draft.fxRates.findIndex((r) => r.currency === rate.currency);
   if (index === -1) draft.fxRates.push(rate);

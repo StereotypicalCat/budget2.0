@@ -1,4 +1,4 @@
-import { CURRENCIES, type Currency, type FxRate } from "../domain/types.ts";
+import type { Currency, FxRate } from "../domain/types.ts";
 
 /** Frankfurter needs no API key. The URL is user-editable in settings. */
 export const DEFAULT_FX_API_URL = "https://api.frankfurter.app/latest?from={base}&to={targets}";
@@ -13,7 +13,18 @@ export function buildFxUrl(
     .replace("{targets}", targets.join(","));
 }
 
-export function parseFxResponse(body: unknown, base: Currency): FxRate[] {
+export function parseFxResponse(
+  body: unknown,
+  base: Currency,
+  /**
+   * The currencies this dataset knows. Anything else in the response is
+   * skipped: a rate service returns dozens, and storing one for a currency the
+   * owner has not defined would put an unreachable row in their table.
+   */
+  allowed: readonly Currency[],
+  /** Defaults to now. The build passes its own date when baking rates in. */
+  updatedAt: string = new Date().toISOString(),
+): FxRate[] {
   const rates =
     typeof body === "object" && body !== null
       ? (body as Record<string, unknown>).rates
@@ -22,12 +33,11 @@ export function parseFxResponse(body: unknown, base: Currency): FxRate[] {
     throw new Error("Exchange rate response has no `rates` object");
   }
 
-  const updatedAt = new Date().toISOString();
   const out: FxRate[] = [];
 
   for (const [currency, value] of Object.entries(rates as Record<string, unknown>)) {
     if (currency === base) continue;
-    if (!CURRENCIES.includes(currency as Currency)) continue;
+    if (!allowed.includes(currency)) continue;
     if (typeof value !== "number" || !(value > 0)) {
       throw new Error(`Exchange rate for ${currency} is not a positive number`);
     }
@@ -52,5 +62,6 @@ export async function fetchFxRates(
   if (!response.ok) {
     throw new Error(`Rate service returned ${response.status}`);
   }
-  return parseFxResponse(await response.json(), base);
+  // The targets we asked for are exactly the ones we will accept back.
+  return parseFxResponse(await response.json(), base, targets);
 }

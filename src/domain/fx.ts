@@ -1,5 +1,6 @@
 import { roundMoney } from "./money.ts";
-import type { Currency, FxRate, Money } from "./types.ts";
+import { digitsFor } from "./currencies.ts";
+import type { Currency, CurrencyDef, FxRate, Money } from "./types.ts";
 
 export class MissingRateError extends Error {
   constructor(public readonly currency: Currency) {
@@ -19,11 +20,13 @@ export function toBase(
   value: Money,
   baseCurrency: Currency,
   rates: FxRate[],
+  currencies: readonly CurrencyDef[],
 ): number {
+  const digits = digitsFor(currencies, baseCurrency);
   if (value.currency === baseCurrency) {
-    return roundMoney(value.amount, baseCurrency);
+    return roundMoney(value.amount, digits);
   }
-  return roundMoney(value.amount * rateFor(value.currency, rates), baseCurrency);
+  return roundMoney(value.amount * rateFor(value.currency, rates), digits);
 }
 
 /** Converts a base-currency amount into `target`, rounded. */
@@ -32,7 +35,9 @@ export function fromBase(
   target: Currency,
   baseCurrency: Currency,
   rates: FxRate[],
+  currencies: readonly CurrencyDef[],
 ): number {
-  if (target === baseCurrency) return roundMoney(amount, target);
-  return roundMoney(amount / rateFor(target, rates), target);
+  const digits = digitsFor(currencies, target);
+  if (target === baseCurrency) return roundMoney(amount, digits);
+  return roundMoney(amount / rateFor(target, rates), digits);
 }

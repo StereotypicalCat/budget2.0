@@ -11,6 +11,7 @@ import {
 } from "../../../export/json.ts";
 import { buildOds, odsFilename } from "../../../export/ods.ts";
 import type { Dataset } from "../../../domain/types.ts";
+import { Section } from "../../components/Section.tsx";
 
 export function DataSection() {
   const dataset = useDataset();
@@ -76,19 +77,27 @@ export function DataSection() {
     // replace, never after. If the backup itself fails, abort rather than
     // destroy the only copy of the user's data.
     if (!runExport(buildJsonExport)) return;
-    await store.replace(pending);
+    // The write itself can still fail — a full disk, evicted storage, a
+    // private-mode quota. Unguarded it is an unhandled rejection: the button
+    // appears to do nothing and the dialog stays open with no explanation.
+    // `pending` is deliberately kept on failure so the user can retry.
+    try {
+      await store.replace(pending);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setError(`Could not import: ${message}. Your data has not been changed.`);
+      return;
+    }
     setPending(null);
   }
 
   const counts = describeDataset(dataset);
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-lg font-medium">Your data</h2>
-      <p className="text-xs text-muted-foreground">
-        Everything lives in this browser. Export regularly — it is both your
-        backup and how you move your budget to another device.
-      </p>
+    <Section
+      title="Your data"
+      hint="Everything lives in this browser. Export regularly — it is both your backup and how you move your budget to another device."
+    >
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={exportJson}>
@@ -138,6 +147,6 @@ export function DataSection() {
           </div>
         </div>
       )}
-    </section>
+    </Section>
   );
 }

@@ -18,5 +18,8 @@ Then, depending on what you are doing:
 Two rules worth knowing before your first edit:
 
 1. **Bun only.** `bun test`, `bun run`, `bunx`. Never npm, jest, vitest or vite.
-2. **There is no browser here.** Anything visual, offline, or focus-related
-   cannot be verified in this environment. Say so rather than claiming it works.
+2. **There IS a browser here** — `bun scripts/screenshot.ts <url> <out.png>`
+   drives headless Chrome and hands you a PNG to look at. Read CLAUDE.md's
+   "Verification limits" first: the container's fonts lie, and offline, the
+   install prompt, the `.ods` in a spreadsheet, and how anything *feels* still
+   need a human. Say so rather than claiming it works.

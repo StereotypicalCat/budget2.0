@@ -10,6 +10,13 @@ import {
 import { foldBalances, figuresFor } from "./fold.ts";
 import type { Dataset, FxRate, Post, Rule } from "./types.ts";
 
+/** Digits for the currencies these tests use; all real-world 2dp. */
+const TEST_CURRENCIES = [
+  { code: "DKK", digits: 2, symbol: "kr" },
+  { code: "USD", digits: 2, symbol: "$" },
+  { code: "EUR", digits: 2, symbol: "\u20ac" },
+];
+
 const rates: FxRate[] = [
   { currency: "EUR", baseUnitsPerOne: 7.46, updatedAt: "2026-09-01", source: "manual" },
   { currency: "USD", baseUnitsPerOne: 6.9, updatedAt: "2026-09-01", source: "manual" },
@@ -36,6 +43,7 @@ function post(overrides: Partial<Post> = {}): Post {
 function dataset(overrides: Partial<Dataset> = {}): Dataset {
   return {
     settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 2 },
+    currencies: TEST_CURRENCIES,
     fxRates: rates,
     posts: [post()],
     months: [
@@ -48,21 +56,21 @@ function dataset(overrides: Partial<Dataset> = {}): Dataset {
 
 describe("resolveRule", () => {
   test("a fixed rule in base currency is its amount", () => {
-    expect(resolveRule(fixed(400), 20000, "DKK", rates)).toBe(400);
+    expect(resolveRule(fixed(400), 20000, "DKK", rates, TEST_CURRENCIES)).toBe(400);
   });
 
   test("a fixed rule in a foreign currency converts to base", () => {
     expect(
-      resolveRule({ kind: "fixed", amount: { amount: 50, currency: "EUR" } }, 20000, "DKK", rates),
+      resolveRule({ kind: "fixed", amount: { amount: 50, currency: "EUR" } }, 20000, "DKK", rates, TEST_CURRENCIES),
     ).toBe(373);
   });
 
   test("a percentage rule resolves against income", () => {
-    expect(resolveRule(pct(25), 20000, "DKK", rates)).toBe(5000);
+    expect(resolveRule(pct(25), 20000, "DKK", rates, TEST_CURRENCIES)).toBe(5000);
   });
 
   test("a percentage above 100 is permitted", () => {
-    expect(resolveRule(pct(150), 1000, "DKK", rates)).toBe(1500);
+    expect(resolveRule(pct(150), 1000, "DKK", rates, TEST_CURRENCIES)).toBe(1500);
   });
 });
 
@@ -177,6 +185,7 @@ describe("the fold across a rule change", () => {
   // rollover carrying correctly across the boundary.
   const data: Dataset = {
     settings: { baseCurrency: "DKK", foldStartMonth: "2026-05", schemaVersion: 2 },
+    currencies: TEST_CURRENCIES,
     fxRates: [],
     posts: [
       post({

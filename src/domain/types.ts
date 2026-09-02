@@ -1,11 +1,37 @@
-export const CURRENCIES = ["DKK", "USD", "EUR"] as const;
-export type Currency = (typeof CURRENCIES)[number];
+/**
+ * A currency CODE, uppercase, normally ISO 4217 ("DKK", "JPY"). Open rather
+ * than a closed union because the owner can define their own currencies:
+ * a union would make that a code change.
+ *
+ * The safety a union gave up is replaced by validation at the boundaries —
+ * `parseDatasetJson` rejects a code no currency defines, and the UI only ever
+ * offers codes from the dataset's own table.
+ */
+export type Currency = string;
 
-export const CURRENCY_DIGITS: Record<Currency, number> = {
-  DKK: 2,
-  USD: 2,
-  EUR: 2,
-};
+/** What the owner has told the app about one currency. */
+export interface CurrencyDef {
+  code: Currency;
+  /** Decimal places in its minor unit: 2 for DKK, 0 for JPY, 3 for KWD. */
+  digits: number;
+  /** "kr", "$", "€". Optional — a currency can be typed by code alone. */
+  symbol?: string;
+  /** "Danish krone". Shown in Settings; never used for identity. */
+  name?: string;
+}
+
+/**
+ * The currencies a brand-new dataset starts with. NOT the set of valid
+ * currencies — that lives in the dataset, because the owner can add more.
+ */
+export const SEED_CURRENCIES: readonly CurrencyDef[] = [
+  { code: "DKK", digits: 2, symbol: "kr", name: "Danish krone" },
+  { code: "USD", digits: 2, symbol: "$", name: "US dollar" },
+  { code: "EUR", digits: 2, symbol: "\u20ac", name: "Euro" },
+];
+
+/** Used when a currency has no definition. Two places is right almost always. */
+export const DEFAULT_CURRENCY_DIGITS = 2;
 
 /** A float amount paired with its currency. See CLAUDE.md for rounding rules. */
 export interface Money {
@@ -106,6 +132,12 @@ export interface Settings {
 
 export interface Dataset {
   settings: Settings;
+  /**
+   * Every currency this dataset knows, including the base. The owner can add
+   * to it, so it — not a compile-time union — is the authority on what codes
+   * are valid, what their symbols are, and how many decimals they round to.
+   */
+  currencies: CurrencyDef[];
   fxRates: FxRate[];
   posts: Post[];
   months: Month[];

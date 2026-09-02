@@ -1,4 +1,5 @@
 import { BASE_PATH, withBase } from "./basePath.ts";
+import { requestUpdate } from "./swUpdate.ts";
 
 let waiting: ServiceWorker | null = null;
 
@@ -32,8 +33,32 @@ export function registerServiceWorker(onUpdateReady: () => void): void {
     });
 }
 
+/**
+ * Reloads only once the new worker is actually in control. Posting
+ * SKIP_WAITING and reloading on the next line raced activation, and when the
+ * reload won, the reloaded page still found a waiting worker and showed the
+ * update prompt again — forever. See src/ui/swUpdate.ts for the measurement.
+ */
 export function applyUpdate(): void {
-  waiting?.postMessage({ type: "SKIP_WAITING" });
+  const target = waiting;
   waiting = null;
-  window.location.reload();
+
+  if (!target) {
+    window.location.reload();
+    return;
+  }
+
+  requestUpdate({
+    postSkipWaiting: () => target.postMessage({ type: "SKIP_WAITING" }),
+    onControllerChange: (listener) => {
+      navigator.serviceWorker.addEventListener("controllerchange", listener);
+      return () =>
+        navigator.serviceWorker.removeEventListener("controllerchange", listener);
+    },
+    setTimer: (fn, ms) => {
+      const id = setTimeout(fn, ms);
+      return () => clearTimeout(id);
+    },
+    reload: () => window.location.reload(),
+  });
 }

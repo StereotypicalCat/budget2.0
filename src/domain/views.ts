@@ -1,4 +1,5 @@
 import { incomeFor, isOverridden } from "./allocation.ts";
+import { digitsFor } from "./currencies.ts";
 import { figuresFor, foldBalances, type Fold, type PostMonthFigures } from "./fold.ts";
 import { roundMoney } from "./money.ts";
 import { compareMonths, monthOf, monthRange, monthsOfYear } from "./months.ts";
@@ -44,13 +45,14 @@ export function monthView(dataset: Dataset, monthId: MonthId): MonthViewModel {
   }
 
   const base = dataset.settings.baseCurrency;
+  const baseDigits = digitsFor(dataset.currencies, base);
   const totalAllocation = roundMoney(
     rows.reduce((sum, r) => sum + r.figures.allocation, 0),
-    base,
+    baseDigits,
   );
   const totalCharges = roundMoney(
     rows.reduce((sum, r) => sum + r.figures.charges, 0),
-    base,
+    baseDigits,
   );
 
   return {
@@ -58,7 +60,7 @@ export function monthView(dataset: Dataset, monthId: MonthId): MonthViewModel {
     income,
     totalAllocation,
     totalCharges,
-    unallocated: roundMoney(income - totalAllocation, base),
+    unallocated: roundMoney(income - totalAllocation, baseDigits),
     rows,
   };
 }
@@ -86,6 +88,7 @@ export function yearView(dataset: Dataset, year: number): YearViewModel {
   const months = monthsOfYear(year);
   const fold = foldBalances(dataset, months[11]!);
   const base = dataset.settings.baseCurrency;
+  const baseDigits = digitsFor(dataset.currencies, base);
 
   const incomeByMonth = months.map((m) => incomeFor(dataset, m));
 
@@ -96,11 +99,11 @@ export function yearView(dataset: Dataset, year: number): YearViewModel {
       byMonth,
       totalAllocation: roundMoney(
         byMonth.reduce((sum, f) => sum + f.allocation, 0),
-        base,
+        baseDigits,
       ),
       totalCharges: roundMoney(
         byMonth.reduce((sum, f) => sum + f.charges, 0),
-        base,
+        baseDigits,
       ),
       closingBalance: byMonth[11]!.remaining,
     };
@@ -112,11 +115,11 @@ export function yearView(dataset: Dataset, year: number): YearViewModel {
     incomeByMonth,
     totalIncome: roundMoney(
       incomeByMonth.reduce((a, b) => a + b, 0),
-      base,
+      baseDigits,
     ),
     totalCharges: roundMoney(
       rows.reduce((sum, r) => sum + r.totalCharges, 0),
-      base,
+      baseDigits,
     ),
     rows,
   };
@@ -138,6 +141,7 @@ export function summaryView(
 ): SummaryViewModel {
   const months = monthRange(from, to);
   const base = dataset.settings.baseCurrency;
+  const baseDigits = digitsFor(dataset.currencies, base);
   const fold: Fold =
     months.length > 0 ? foldBalances(dataset, months[months.length - 1]!) : new Map();
 
@@ -145,7 +149,7 @@ export function summaryView(
     post,
     charges: roundMoney(
       months.reduce((sum, m) => sum + figuresFor(fold, post.id, m).charges, 0),
-      base,
+      baseDigits,
     ),
   }));
 
@@ -156,7 +160,7 @@ export function summaryView(
         (sum, p) => sum + figuresFor(fold, p.id, monthId).charges,
         0,
       ),
-      base,
+      baseDigits,
     ),
   }));
 
@@ -167,11 +171,11 @@ export function summaryView(
     byMonth,
     totalCharges: roundMoney(
       byMonth.reduce((sum, m) => sum + m.charges, 0),
-      base,
+      baseDigits,
     ),
     totalIncome: roundMoney(
       months.reduce((sum, m) => sum + incomeFor(dataset, m), 0),
-      base,
+      baseDigits,
     ),
   };
 }

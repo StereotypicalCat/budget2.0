@@ -4,10 +4,11 @@ import { Input } from "@/components/ui/input";
 import { useDataset } from "../../hooks/useDataset.ts";
 import { useMutate } from "../../hooks/useMutate.ts";
 import { addPost, movePost, setPostArchived, updatePost } from "../../../store/actions.ts";
-import { CURRENCIES, type Currency, type Post } from "../../../domain/types.ts";
+import type { Currency, Post } from "../../../domain/types.ts";
 import { ruleAt } from "../../../domain/allocation.ts";
 import { currentMonth } from "../../../store/index.ts";
 import { RuleHistory } from "../../components/RuleHistory.tsx";
+import { Section } from "../../components/Section.tsx";
 
 export function PostsSection() {
   const dataset = useDataset();
@@ -34,22 +35,17 @@ export function PostsSection() {
   }
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-lg font-medium">Posts</h2>
-      <p className="text-xs text-muted-foreground">
-        A post's allocation is a dated series: each rule applies from its own
-        month onward until the next one takes over, so changing it never
-        rewrites what earlier months got. Click a rule to see and edit that
-        history. Any single month can still override its own allocation from
-        the month view. Percentages may total more than 100%.
-      </p>
+    <Section
+      title="Posts"
+      hint="A post's allocation is a dated series: each rule applies from its own month onward until the next one takes over, so changing it never rewrites what earlier months got. Click a rule to see and edit that history. A single month can still override its own allocation from the month view, and percentages may total more than 100%."
+    >
 
       <table className="w-full text-sm">
-        <thead className="border-b text-left text-muted-foreground">
-          <tr>
-            <th className="py-2">Name</th>
-            <th className="py-2">Display currency</th>
-            <th className="py-2">Rule</th>
+        <thead className="text-left">
+          <tr className="border-b border-budget-rule text-[0.6875rem] uppercase tracking-wider text-budget-ink-muted">
+            <th className="py-2 font-medium">Name</th>
+            <th className="py-2 font-medium">Display currency</th>
+            <th className="py-2 font-medium">Rule</th>
             <th className="py-2" />
           </tr>
         </thead>
@@ -76,7 +72,7 @@ export function PostsSection() {
                       mutate((draft) => updatePost(draft, post.id, { currency }));
                     }}
                   >
-                    {CURRENCIES.map((currency) => (
+                    {dataset.currencies.map(({ code: currency }) => (
                       <option key={currency} value={currency}>
                         {currency}
                       </option>
@@ -121,7 +117,7 @@ export function PostsSection() {
           ))}
         </tbody>
       </table>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-budget-ink-muted">
         Archiving hides a post from new purchases while keeping its history. Posts
         are never deleted, because purchases reference them.
       </p>
@@ -144,6 +140,6 @@ export function PostsSection() {
           Add post
         </Button>
       </div>
-    </section>
+    </Section>
   );
 }

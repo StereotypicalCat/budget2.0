@@ -1,8 +1,10 @@
 import { toBase } from "./fx.ts";
 import { roundMoney } from "./money.ts";
+import { digitsFor } from "./currencies.ts";
 import { compareMonths } from "./months.ts";
 import type {
   Currency,
+  CurrencyDef,
   Dataset,
   FxRate,
   Month,
@@ -19,11 +21,12 @@ export function resolveRule(
   income: number,
   baseCurrency: Currency,
   rates: FxRate[],
+  currencies: readonly CurrencyDef[],
 ): number {
   if (rule.kind === "fixed") {
-    return toBase(rule.amount, baseCurrency, rates);
+    return toBase(rule.amount, baseCurrency, rates, currencies);
   }
-  return roundMoney((income * rule.percent) / 100, baseCurrency);
+  return roundMoney((income * rule.percent) / 100, digitsFor(currencies, baseCurrency));
 }
 
 /**
@@ -65,7 +68,12 @@ export function isOverridden(month: Month | undefined, postId: PostId): boolean 
 export function incomeFor(dataset: Dataset, monthId: MonthId): number {
   const month = dataset.months.find((m) => m.id === monthId);
   if (!month) return 0;
-  return toBase(month.income, dataset.settings.baseCurrency, dataset.fxRates);
+  return toBase(
+    month.income,
+    dataset.settings.baseCurrency,
+    dataset.fxRates,
+    dataset.currencies,
+  );
 }
 
 export function allocationFor(
@@ -83,5 +91,6 @@ export function allocationFor(
     incomeFor(dataset, monthId),
     dataset.settings.baseCurrency,
     dataset.fxRates,
+    dataset.currencies,
   );
 }

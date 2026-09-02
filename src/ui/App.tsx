@@ -9,26 +9,57 @@ import { SummaryRoute } from "./routes/SummaryRoute.tsx";
 import { SettingsRoute } from "./routes/SettingsRoute.tsx";
 import { UpdatePrompt } from "./components/UpdatePrompt.tsx";
 import { RouteErrorBoundaryReset } from "./components/ErrorBoundary.tsx";
+import { ThemeToggle } from "./components/ThemeToggle.tsx";
+
+/**
+ * One nav item. The active route is marked with weight and an accent
+ * underline rather than colour alone, so it does not depend on colour vision,
+ * and the underline is drawn on a fixed-height pseudo-row so switching tabs
+ * never shifts the header's layout.
+ */
+function NavItem({ to, children }: { to: string; children: React.ReactNode }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        [
+          "relative rounded-md px-2.5 py-1.5 transition-colors",
+          "after:absolute after:inset-x-2.5 after:-bottom-px after:h-0.5 after:rounded-full",
+          isActive
+            ? "font-semibold text-budget-ink after:bg-budget-accent"
+            : "text-budget-ink-muted hover:text-budget-ink hover:bg-accent after:bg-transparent",
+        ].join(" ")
+      }
+    >
+      {children}
+    </NavLink>
+  );
+}
 
 export function AppRoutes() {
   const year = currentMonth.slice(0, 4);
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <nav className="flex gap-4 border-b px-6 py-3 text-sm">
-        <NavLink to={`/month/${currentMonth}`} className="hover:underline">
-          Month
-        </NavLink>
-        <NavLink to={`/year/${year}`} className="hover:underline">
-          Year
-        </NavLink>
-        <NavLink to="/summary" className="hover:underline">
-          Summary
-        </NavLink>
-        <NavLink to="/settings" className="ml-auto hover:underline">
-          Settings
-        </NavLink>
-      </nav>
-      <main className="p-6">
+      {/* Sticky because the month view is long and the nav is how you leave
+          it. Translucent with a blur so the paper ground still reads as one
+          continuous sheet scrolling underneath. */}
+      <header className="sticky top-0 z-30 border-b border-budget-rule bg-budget-paper/85 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center gap-1 px-4 py-2.5 sm:px-6">
+          <span className="mr-3 hidden text-sm font-semibold tracking-tight text-budget-ink sm:block">
+            Budget<span className="text-budget-accent">&nbsp;2.0</span>
+          </span>
+          <nav className="flex items-center gap-1 text-sm">
+            <NavItem to={`/month/${currentMonth}`}>Month</NavItem>
+            <NavItem to={`/year/${year}`}>Year</NavItem>
+            <NavItem to="/summary">Summary</NavItem>
+          </nav>
+          <div className="ml-auto flex items-center gap-1">
+            <ThemeToggle />
+            <NavItem to="/settings">Settings</NavItem>
+          </div>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         <RouteErrorBoundaryReset>
           <Routes>
             <Route path="/month/:monthId" element={<MonthRoute />} />

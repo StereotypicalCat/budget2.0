@@ -2,6 +2,13 @@ import { test, expect, describe } from "bun:test";
 import { foldBalances, figuresFor } from "./fold.ts";
 import type { Dataset, Post, Purchase } from "./types.ts";
 
+/** Digits for the currencies these tests use; all real-world 2dp. */
+const TEST_CURRENCIES = [
+  { code: "DKK", digits: 2, symbol: "kr" },
+  { code: "USD", digits: 2, symbol: "$" },
+  { code: "EUR", digits: 2, symbol: "\u20ac" },
+];
+
 function post(id: string, fixed: number, archived = false): Post {
   return {
     id,
@@ -28,6 +35,7 @@ function spend(id: string, postId: string, amount: number, date: string): Purcha
 function dataset(posts: Post[], purchases: Purchase[]): Dataset {
   return {
     settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 1 },
+    currencies: TEST_CURRENCIES,
     fxRates: [],
     posts,
     months: [
@@ -145,5 +153,21 @@ test("figuresFor returns zeroes for a month outside the fold", () => {
     allocation: 0,
     charges: 0,
     remaining: 0,
+  });
+});
+
+describe("the empty-figures fallback", () => {
+  // figuresFor returns EMPTY_FIGURES by SHARED REFERENCE for any (post, month)
+  // the fold has no entry for. One consumer mutating that object would move
+  // every other unknown row with it — in a budgeting app, silently.
+  test("cannot be mutated through the value figuresFor hands back", () => {
+    const fold = foldBalances(dataset([post("food", 500)], []), "2026-01");
+    const missing = figuresFor(fold, "no-such-post", "2026-01");
+
+    expect(() => {
+      (missing as { allocation: number }).allocation = 999;
+    }).toThrow(TypeError);
+
+    expect(figuresFor(fold, "another-missing-post", "2026-01").allocation).toBe(0);
   });
 });

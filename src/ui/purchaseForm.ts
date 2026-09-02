@@ -45,10 +45,10 @@ export function emptyDraft(monthId: MonthId, postId: string): PurchaseDraft {
 }
 
 /** What the split editor must show: how far the parts are from the whole. */
-export function splitBalance(draft: PurchaseDraft): number {
+export function splitBalance(draft: PurchaseDraft, digits: number): number {
   const target = draft.splitMode === "percent" ? 100 : draft.amount;
   const sum = draft.splits.reduce((total, split) => total + split.value, 0);
-  return roundMoney(target - sum, draft.currency);
+  return roundMoney(target - sum, digits);
 }
 
 export function validatePurchase(draft: PurchaseDraft): string[] {
@@ -104,12 +104,18 @@ export function withPlan(
   draft: PurchaseDraft,
   startMonth: MonthId,
   months: number,
+  digits: number,
 ): PurchaseDraft {
   return {
     ...draft,
     plan: {
       startMonth,
-      slices: equalSlices({ amount: draft.amount, currency: draft.currency }, startMonth, months),
+      slices: equalSlices(
+        { amount: draft.amount, currency: draft.currency },
+        startMonth,
+        months,
+        digits,
+      ),
     },
   };
 }
@@ -140,9 +146,13 @@ export function setSliceAmount(
  * slices and compare to the total" arithmetic has exactly one implementation.
  * Positive means the slices fall short of the purchase total.
  */
-export function planBalance(draft: PurchaseDraft): number {
+export function planBalance(draft: PurchaseDraft, digits: number): number {
   if (!draft.plan) return 0;
-  return slicesBalance({ amount: draft.amount, currency: draft.currency }, draft.plan.slices);
+  return slicesBalance(
+    { amount: draft.amount, currency: draft.currency },
+    draft.plan.slices,
+    digits,
+  );
 }
 
 export function fromPurchase(purchase: Purchase): PurchaseDraft {

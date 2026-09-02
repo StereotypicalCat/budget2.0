@@ -1,6 +1,7 @@
-import type { Dataset, MonthId, Post } from "./types.ts";
+import { SEED_CURRENCIES } from "./types.ts";
+import type { CurrencyDef, Dataset, FxRate, MonthId, Post } from "./types.ts";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 const SEED_POST_NAMES = ["Video Games", "Food", "Events and Social"] as const;
 
@@ -9,10 +10,16 @@ export function newId(): string {
 }
 
 /**
- * The first-run dataset. Takes the start month as an argument because the
- * domain layer must not read the ambient clock.
+ * The first-run dataset. Takes the start month AND the seed exchange rates as
+ * arguments because the domain layer must read neither the ambient clock nor
+ * the ambient environment. The store passes `BAKED_FX_RATES`; callers that
+ * want a bare dataset pass nothing.
  */
-export function createSeedDataset(startMonth: MonthId): Dataset {
+export function createSeedDataset(
+  startMonth: MonthId,
+  fxRates: readonly FxRate[] = [],
+  currencies: readonly CurrencyDef[] = SEED_CURRENCIES,
+): Dataset {
   const posts: Post[] = SEED_POST_NAMES.map((name, order) => ({
     id: newId(),
     name,
@@ -30,7 +37,10 @@ export function createSeedDataset(startMonth: MonthId): Dataset {
       foldStartMonth: startMonth,
       schemaVersion: SCHEMA_VERSION,
     },
-    fxRates: [],
+    // Copied, so a caller passing shared constants cannot have them edited
+    // out from under it the first time the user changes a rate or a currency.
+    currencies: currencies.map((currency) => ({ ...currency })),
+    fxRates: fxRates.map((rate) => ({ ...rate })),
     posts,
     months: [
       { id: startMonth, income: { amount: 0, currency: "DKK" }, ruleOverrides: {} },

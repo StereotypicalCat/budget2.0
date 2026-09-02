@@ -88,6 +88,15 @@ A float, deliberately, with two rules that make it safe:
 **`FxRate.baseUnitsPerOne` is never rounded.** Rates are stored at six decimals
 and are not money; quantizing one to cents is wrong in kind.
 
+**Decimal places are data, not a constant.** `Dataset.currencies` records each
+currency's code, name, symbol and digits, because the owner can define their
+own. `roundMoney` therefore takes a digit count and every call site resolves it
+with `digitsFor` — required rather than defaulted, so a missed site is a
+compile error instead of something that works for every 2-decimal currency and
+breaks on the first zero-decimal one. `src/domain/currencyDigits.test.ts` drives
+a zero-decimal currency through the whole stack, which is the only test that can
+tell a real implementation from one that assumes 2.
+
 ## Splits and finance plans compose
 
 A purchase can be split across posts *and* spread over months at once. The trick
@@ -136,12 +145,22 @@ Adding a "missing" guard here is a regression, not a fix:
 Most logic is pure and tested directly with `bun test`. The domain carries the
 bulk of the coverage; the UI is thin by design.
 
-**There is no browser in the agent environment.** Nothing has ever verified
-visual appearance, real offline behaviour, the install or update prompts,
-keyboard focus traversal, or the `.ods` opening in a spreadsheet. Where a check
-could not be run, the honest substitute was used and recorded — for example the
-`.ods` is validated structurally by unzipping it and asserting `mimetype` is
-first and stored, every XML part parses, and numeric cells carry `office:value`.
+**A browser IS available**, via `scripts/screenshot.ts` — headless Chrome
+driven over CDP, because Chrome's own `--screenshot` fires on the load event
+and captures an empty page before this app's async IndexedDB read resolves.
+That script is how the month view, the carry meter and the rule editors were
+first seen by anyone. It reports console errors too, which is the point: a page
+that renders blank because of a thrown error looks identical to an empty one.
+
+Its limits are real. The container's fontconfig maps every generic family to a
+monospace face, so screenshots need a `FONTCONFIG_FILE` override to be
+representative; Chrome starts with an empty profile each run; and no screenshot
+can judge how a design feels. Real offline behaviour, the install and update
+prompts, and the `.ods` opening in a spreadsheet remain unverifiable here.
+Where a check could not be run, the honest substitute was used and recorded —
+the `.ods` is validated structurally by unzipping it and asserting `mimetype`
+is first and stored, every XML part parses, and numeric cells carry
+`office:value`.
 
 `src/ui/eventCapture.test.ts` is a *source-level* guard rather than a
 behavioural one, because the bug it prevents depends on real browser render

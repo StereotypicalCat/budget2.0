@@ -1,5 +1,5 @@
 import { createSeedDataset } from "../domain/seed.ts";
-import type { Dataset, MonthId } from "../domain/types.ts";
+import type { Dataset, FxRate, MonthId } from "../domain/types.ts";
 
 export interface Persistence {
   read(): Promise<Dataset | null>;
@@ -19,6 +19,13 @@ export interface SnapshotStore {
 export function createSnapshotStore(
   persistence: Persistence,
   currentMonth: MonthId,
+  /**
+   * Rates for a FIRST RUN only. Passed in rather than read here so this module
+   * stays free of the ambient environment; src/store/index.ts supplies
+   * BAKED_FX_RATES. Loading an existing dataset never touches its rates — the
+   * user may have cleared one deliberately.
+   */
+  seedRates: readonly FxRate[] = [],
 ): SnapshotStore {
   let snapshot: Dataset | null = null;
   const listeners = new Set<Listener>();
@@ -64,7 +71,7 @@ export function createSnapshotStore(
         notify();
         return;
       }
-      await commit(createSeedDataset(currentMonth));
+      await commit(createSeedDataset(currentMonth, seedRates));
     },
 
     get,

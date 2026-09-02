@@ -4,9 +4,30 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Budget 2.0</title>
+    <!-- Relative, NOT root-absolute: the dev server's HTML bundler resolves
+         every <link href> from disk and has no `external` option, so "/x"
+         fails to resolve and the whole page 500s. build.ts rewrites these to
+         the deploy base for production. -->
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#0f172a" />
+    <!--
+      Applies the saved theme BEFORE the stylesheet paints, so a dark-theme
+      user never sees a flash of the light palette. It cannot import
+      src/ui/theme.ts (it has to run before any module loads), so it repeats
+      the key and the fallback; src/ui/theme.test.ts fails if the two drift.
+      Wrapped because localStorage throws outright in some configurations.
+    -->
+    <script>
+      try {
+        var saved = localStorage.getItem("budget2:theme");
+        var dark =
+          saved === "dark" ||
+          ((saved === null || saved === "system") &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) document.documentElement.classList.add("dark");
+      } catch (e) {}
+    </script>
     <script type="module" src="./frontend.tsx" async></script>
   </head>
   <body>

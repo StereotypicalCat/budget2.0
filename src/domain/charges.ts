@@ -1,8 +1,10 @@
 import { toBase } from "./fx.ts";
+import { digitsFor } from "./currencies.ts";
 import { distributeByAmount, distributeByWeight, roundMoney } from "./money.ts";
 import { compareMonths, monthOf } from "./months.ts";
 import type {
   Currency,
+  CurrencyDef,
   Dataset,
   FxRate,
   Money,
@@ -31,14 +33,13 @@ export function remainderIndexOf(purchase: Purchase): number {
  * How the whole purchase divides across its posts, in the purchase's own
  * currency. Parts sum exactly to the total.
  */
-export function splitPartsOfTotal(purchase: Purchase): number[] {
+export function splitPartsOfTotal(purchase: Purchase, digits: number): number[] {
   const index = remainderIndexOf(purchase);
   const values = purchase.splits.map((s) => s.value);
   const total = purchase.total.amount;
-  const currency = purchase.total.currency;
   return purchase.splitMode === "percent"
-    ? distributeByWeight(total, values, index, currency)
-    : distributeByAmount(total, values, index, currency);
+    ? distributeByWeight(total, values, index, digits)
+    : distributeByAmount(total, values, index, digits);
 }
 
 /**
@@ -72,14 +73,18 @@ export function chargesForPurchaseInMonth(
   monthId: MonthId,
   baseCurrency: Currency,
   rates: FxRate[],
+  currencies: readonly CurrencyDef[],
 ): Charge[] {
   const slice = sliceAmountForMonth(purchase, monthId);
   if (!slice) return [];
 
-  const sliceBase = toBase(slice, baseCurrency, rates);
+  const sliceBase = toBase(slice, baseCurrency, rates, currencies);
   const index = remainderIndexOf(purchase);
-  const weights = splitPartsOfTotal(purchase);
-  const parts = distributeByWeight(sliceBase, weights, index, baseCurrency);
+  // Split proportions are computed in the PURCHASE's own currency, then the
+  // month's slice is distributed to those proportions in the BASE currency —
+  // so the two roundings use different digits.
+  const weights = splitPartsOfTotal(purchase, digitsFor(currencies, purchase.total.currency));
+  const parts = distributeByWeight(sliceBase, weights, index, digitsFor(currencies, baseCurrency));
 
   return purchase.splits.map((split, i) => ({
     postId: split.postId,
@@ -93,18 +98,20 @@ export function chargesForMonth(
   monthId: MonthId,
 ): Map<PostId, number> {
   const totals = new Map<PostId, number>();
+  const baseDigits = digitsFor(dataset.currencies, dataset.settings.baseCurrency);
   for (const purchase of dataset.purchases) {
     const charges = chargesForPurchaseInMonth(
       purchase,
       monthId,
       dataset.settings.baseCurrency,
       dataset.fxRates,
+      dataset.currencies,
     );
     for (const charge of charges) {
       const previous = totals.get(charge.postId) ?? 0;
       totals.set(
         charge.postId,
-        roundMoney(previous + charge.amount, dataset.settings.baseCurrency),
+        roundMoney(previous + charge.amount, baseDigits),
       );
     }
   }

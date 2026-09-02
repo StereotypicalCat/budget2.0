@@ -1,4 +1,5 @@
 import { allocationFor } from "./allocation.ts";
+import { digitsFor } from "./currencies.ts";
 import { chargesForMonth } from "./charges.ts";
 import { roundMoney } from "./money.ts";
 import { compareMonths, monthRange } from "./months.ts";
@@ -12,12 +13,17 @@ export interface PostMonthFigures {
   remaining: number;
 }
 
-export const EMPTY_FIGURES: PostMonthFigures = {
+/**
+ * Frozen because `figuresFor` hands this back by shared reference for every
+ * (post, month) the fold has no entry for. Unfrozen, one consumer mutating
+ * its result would move every other unknown row with it.
+ */
+export const EMPTY_FIGURES: PostMonthFigures = Object.freeze({
   carriedIn: 0,
   allocation: 0,
   charges: 0,
   remaining: 0,
-};
+});
 
 export type Fold = Map<MonthId, Map<PostId, PostMonthFigures>>;
 
@@ -31,6 +37,7 @@ export type Fold = Map<MonthId, Map<PostId, PostMonthFigures>>;
  */
 export function foldBalances(dataset: Dataset, upToMonth: MonthId): Fold {
   const { foldStartMonth, baseCurrency } = dataset.settings;
+  const baseDigits = digitsFor(dataset.currencies, baseCurrency);
   const fold: Fold = new Map();
 
   if (compareMonths(upToMonth, foldStartMonth) < 0) return fold;
@@ -45,7 +52,7 @@ export function foldBalances(dataset: Dataset, upToMonth: MonthId): Fold {
       const carriedIn = carried.get(post.id) ?? 0;
       const allocation = allocationFor(dataset, post.id, monthId);
       const spent = charges.get(post.id) ?? 0;
-      const remaining = roundMoney(carriedIn + allocation - spent, baseCurrency);
+      const remaining = roundMoney(carriedIn + allocation - spent, baseDigits);
 
       monthFigures.set(post.id, {
         carriedIn,
