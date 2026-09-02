@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDataset } from "../../hooks/useDataset.ts";
@@ -7,11 +7,13 @@ import { addPost, movePost, setPostArchived, updatePost } from "../../../store/a
 import { CURRENCIES, type Currency, type Post } from "../../../domain/types.ts";
 import { ruleAt } from "../../../domain/allocation.ts";
 import { currentMonth } from "../../../store/index.ts";
+import { RuleHistory } from "../../components/RuleHistory.tsx";
 
 export function PostsSection() {
   const dataset = useDataset();
   const { mutate } = useMutate();
   const [newName, setNewName] = useState("");
+  const [openHistory, setOpenHistory] = useState<string | null>(null);
   const ordered = [...dataset.posts].sort((a, b) => a.order - b.order);
   const base = dataset.settings.baseCurrency;
 
@@ -35,9 +37,11 @@ export function PostsSection() {
     <section className="space-y-4">
       <h2 className="text-lg font-medium">Posts</h2>
       <p className="text-xs text-muted-foreground">
-        Standing rules apply to every month automatically. Any single month can
-        override its own allocation from the month view. Percentages may total
-        more than 100%.
+        A post's allocation is a dated series: each rule applies from its own
+        month onward until the next one takes over, so changing it never
+        rewrites what earlier months got. Click a rule to see and edit that
+        history. Any single month can still override its own allocation from
+        the month view. Percentages may total more than 100%.
       </p>
 
       <table className="w-full text-sm">
@@ -45,55 +49,75 @@ export function PostsSection() {
           <tr>
             <th className="py-2">Name</th>
             <th className="py-2">Display currency</th>
-            <th className="py-2">Standing rule</th>
+            <th className="py-2">Rule</th>
             <th className="py-2" />
           </tr>
         </thead>
         <tbody>
           {ordered.map((post, index) => (
-            <tr key={post.id} className={`border-b last:border-0 ${post.archived ? "opacity-50" : ""}`}>
-              <td className="py-2">
-                <Input
-                  className="h-8 w-48"
-                  value={post.name}
-                  onChange={(event) => {
-                    const name = event.target.value;
-                    mutate((draft) => updatePost(draft, post.id, { name }));
-                  }}
-                />
-              </td>
-              <td className="py-2">
-                <select
-                  className="h-8 rounded border bg-background px-1 text-xs"
-                  value={post.currency}
-                  onChange={(event) => {
-                    const currency = event.target.value as Currency;
-                    mutate((draft) => updatePost(draft, post.id, { currency }));
-                  }}
-                >
-                  {CURRENCIES.map((currency) => (
-                    <option key={currency} value={currency}>
-                      {currency}
-                    </option>
-                  ))}
-                </select>
-              </td>
-              <td className="py-2">{ruleSummary(post)}</td>
-              <td className="py-2 text-right">
-                <Button size="sm" variant="ghost" disabled={index === 0}
-                  onClick={() => mutate((draft) => movePost(draft, post.id, -1))}>
-                  up
-                </Button>
-                <Button size="sm" variant="ghost" disabled={index === ordered.length - 1}
-                  onClick={() => mutate((draft) => movePost(draft, post.id, 1))}>
-                  down
-                </Button>
-                <Button size="sm" variant="ghost"
-                  onClick={() => mutate((draft) => setPostArchived(draft, post.id, !post.archived))}>
-                  {post.archived ? "restore" : "archive"}
-                </Button>
-              </td>
-            </tr>
+            <Fragment key={post.id}>
+              <tr className={`border-b last:border-0 ${post.archived ? "opacity-50" : ""}`}>
+                <td className="py-2">
+                  <Input
+                    className="h-8 w-48"
+                    value={post.name}
+                    onChange={(event) => {
+                      const name = event.target.value;
+                      mutate((draft) => updatePost(draft, post.id, { name }));
+                    }}
+                  />
+                </td>
+                <td className="py-2">
+                  <select
+                    className="h-8 rounded border bg-background px-1 text-xs"
+                    value={post.currency}
+                    onChange={(event) => {
+                      const currency = event.target.value as Currency;
+                      mutate((draft) => updatePost(draft, post.id, { currency }));
+                    }}
+                  >
+                    {CURRENCIES.map((currency) => (
+                      <option key={currency} value={currency}>
+                        {currency}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="py-2">
+                  <button
+                    type="button"
+                    className="underline decoration-dotted"
+                    aria-expanded={openHistory === post.id}
+                    onClick={() =>
+                      setOpenHistory((id) => (id === post.id ? null : post.id))
+                    }
+                  >
+                    {ruleSummary(post)}
+                  </button>
+                </td>
+                <td className="py-2 text-right">
+                  <Button size="sm" variant="ghost" disabled={index === 0}
+                    onClick={() => mutate((draft) => movePost(draft, post.id, -1))}>
+                    up
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={index === ordered.length - 1}
+                    onClick={() => mutate((draft) => movePost(draft, post.id, 1))}>
+                    down
+                  </Button>
+                  <Button size="sm" variant="ghost"
+                    onClick={() => mutate((draft) => setPostArchived(draft, post.id, !post.archived))}>
+                    {post.archived ? "restore" : "archive"}
+                  </Button>
+                </td>
+              </tr>
+              {openHistory === post.id && (
+                <tr className="border-b last:border-0">
+                  <td colSpan={4} className="pb-3">
+                    <RuleHistory post={post} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>
