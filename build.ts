@@ -104,6 +104,10 @@ const result = await Bun.build({
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
     "process.env.BUN_PUBLIC_BASE_PATH": JSON.stringify(basePath),
+    // The same `version` the service worker gets, so the colophon can name the
+    // build a bug report is about. Only defined here, never in dev, which is
+    // why it is read through a try/catch accessor.
+    "process.env.BUN_PUBLIC_BUILD_VERSION": JSON.stringify(version),
     // Double-encoded on purpose: the inlined literal must be a JSON *string*
     // for parseBakedRates to parse at runtime.
     "process.env.BUN_PUBLIC_BAKED_FX_RATES": JSON.stringify(JSON.stringify(bakedFxRates)),

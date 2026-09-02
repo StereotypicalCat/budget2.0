@@ -1,6 +1,7 @@
 import { CurrencySection } from "./settings/CurrencySection.tsx";
 import { PostsSection } from "./settings/PostsSection.tsx";
 import { DataSection } from "./settings/DataSection.tsx";
+import { ColophonSection } from "./settings/ColophonSection.tsx";
 
 /**
  * Each section is its own card. They are unrelated settings — money, posts,
@@ -15,6 +16,7 @@ export function SettingsRoute() {
       <CurrencySection />
       <PostsSection />
       <DataSection />
+      <ColophonSection />
     </div>
   );
 }

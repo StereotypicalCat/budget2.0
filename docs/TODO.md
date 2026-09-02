@@ -8,7 +8,7 @@ decisions behind it are in `docs/specs/` — one spec per sub-project,
 each recording the alternatives that were rejected. Rules that outlived their
 task moved to `AGENTS.md`.
 
-**Current state:** merged to `main`, not yet pushed. 446 tests passing,
+**Current state:** merged to `main`. 452 tests passing,
 `bunx tsc --noEmit` clean, `bun run build` succeeds on both the live-fetch and
 offline paths.
 
