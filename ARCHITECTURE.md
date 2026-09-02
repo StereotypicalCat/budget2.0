@@ -88,6 +88,15 @@ A float, deliberately, with two rules that make it safe:
 **`FxRate.baseUnitsPerOne` is never rounded.** Rates are stored at six decimals
 and are not money; quantizing one to cents is wrong in kind.
 
+**Decimal places are data, not a constant.** `Dataset.currencies` records each
+currency's code, name, symbol and digits, because the owner can define their
+own. `roundMoney` therefore takes a digit count and every call site resolves it
+with `digitsFor` — required rather than defaulted, so a missed site is a
+compile error instead of something that works for every 2-decimal currency and
+breaks on the first zero-decimal one. `src/domain/currencyDigits.test.ts` drives
+a zero-decimal currency through the whole stack, which is the only test that can
+tell a real implementation from one that assumes 2.
+
 ## Splits and finance plans compose
 
 A purchase can be split across posts *and* spread over months at once. The trick
