@@ -5,6 +5,7 @@ import { useDataset } from "../hooks/useDataset.ts";
 import { yearView } from "../../domain/views.ts";
 import { formatMoney } from "../format.ts";
 import { YearMatrix } from "../components/YearMatrix.tsx";
+import { Section, Stat } from "../components/Section.tsx";
 
 export function YearRoute() {
   const { year = "" } = useParams();
@@ -15,35 +16,49 @@ export function YearRoute() {
   const base = dataset.settings.baseCurrency;
 
   return (
-    <section className="space-y-6">
-      <header className="flex items-center gap-4">
-        <Link to={`/year/${numericYear - 1}`} className="text-sm hover:underline">
+    <div className="space-y-5">
+      <header className="flex items-baseline gap-3">
+        <Link
+          to={`/year/${numericYear - 1}`}
+          className="font-money rounded-md px-1.5 py-0.5 text-xs text-budget-ink-muted transition-colors hover:bg-accent hover:text-budget-ink"
+        >
           &larr; {numericYear - 1}
         </Link>
-        <h1 className="text-2xl font-semibold">{year}</h1>
-        <Link to={`/year/${numericYear + 1}`} className="text-sm hover:underline">
+        <h1 className="text-2xl">{year}</h1>
+        <Link
+          to={`/year/${numericYear + 1}`}
+          className="font-money rounded-md px-1.5 py-0.5 text-xs text-budget-ink-muted transition-colors hover:bg-accent hover:text-budget-ink"
+        >
           {numericYear + 1} &rarr;
         </Link>
-        <div className="ml-auto flex gap-1">
-          {(["spend", "balance"] as const).map((option) => (
-            <Button
-              key={option}
-              size="sm"
-              variant={mode === option ? "default" : "outline"}
-              onClick={() => setMode(option)}
-            >
-              {option === "spend" ? "Spent" : "Closing balance"}
-            </Button>
-          ))}
-        </div>
       </header>
 
-      <p className="text-sm text-muted-foreground">
-        Income {formatMoney(view.totalIncome, base)} &middot; spent{" "}
-        {formatMoney(view.totalCharges, base)}
-      </p>
+      <Section>
+        <dl className="flex flex-wrap gap-x-10 gap-y-4">
+          <Stat label="Income">{formatMoney(view.totalIncome, base)}</Stat>
+          <Stat label="Spent">{formatMoney(view.totalCharges, base)}</Stat>
+        </dl>
+      </Section>
 
-      <YearMatrix view={view} mode={mode} />
-    </section>
+      <Section
+        title="Posts by month"
+        action={
+          <div className="flex gap-1">
+            {(["spend", "balance"] as const).map((option) => (
+              <Button
+                key={option}
+                size="sm"
+                variant={mode === option ? "default" : "outline"}
+                onClick={() => setMode(option)}
+              >
+                {option === "spend" ? "Spent" : "Closing balance"}
+              </Button>
+            ))}
+          </div>
+        }
+      >
+        <YearMatrix view={view} mode={mode} />
+      </Section>
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Section } from "../../components/Section.tsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,8 +36,7 @@ export function CurrencySection() {
   }
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-lg font-medium">Currency</h2>
+    <Section title="Currency">
 
       <div className="space-y-1">
         <Label htmlFor="base-currency">Base currency (all totals use this)</Label>
@@ -58,8 +58,8 @@ export function CurrencySection() {
       </div>
 
       <table className="w-full max-w-md text-sm">
-        <thead className="border-b text-left text-muted-foreground">
-          <tr>
+        <thead className="text-left">
+          <tr className="border-b border-budget-rule text-[0.6875rem] uppercase tracking-wider text-budget-ink-muted">
             <th className="py-2">Currency</th>
             <th className="py-2 text-right">1 unit = ? {base}</th>
             <th className="py-2 text-right">Source</th>
@@ -133,6 +133,6 @@ export function CurrencySection() {
         </Button>
         {status && <p className="text-xs">{status}</p>}
       </div>
-    </section>
+    </Section>
   );
 }

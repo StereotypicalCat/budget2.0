@@ -3,6 +3,7 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { normalizeBase } from "./src/ui/basePath.ts";
 import { buildManifest } from "./src/manifest.ts";
+import { FONT_FILES } from "./src/fontCss.ts";
 import { buildFxUrl, parseFxResponse, DEFAULT_FX_API_URL } from "./src/store/fxApi.ts";
 import { FALLBACK_FX_RATES } from "./src/store/bakedRates.ts";
 import type { Currency, FxRate } from "./src/domain/types.ts";
@@ -125,6 +126,7 @@ const STATIC_ASSETS = [
   "icon.svg",
   "icon-192.png",
   "icon-512.png",
+  ...FONT_FILES.map((file) => `fonts/${file}`),
 ];
 
 // The precache list comes from the build's own outputs, so hashed filenames can
@@ -162,6 +164,9 @@ for (const size of [192, 512]) {
     Bun.file(`src/icon-${size}.png`),
   );
 }
+for (const file of FONT_FILES) {
+  await Bun.write(path.join(outdir, "fonts", file), Bun.file(`src/fonts/${file}`));
+}
 
 // This is an SPA: every route serves the same shell, so the *document* URL
 // can be several segments deep (e.g. /budget2.0/month/2026-09). Relative
@@ -173,9 +178,14 @@ for (const size of [192, 512]) {
 // rather than hardcoded in src/index.html so the dev server (which always
 // serves from "/") keeps working unchanged.
 let indexHtml = await Bun.file(path.join(outdir, "index.html")).text();
-indexHtml = indexHtml
-  .replace('href="manifest.webmanifest"', `href="${basePath}manifest.webmanifest"`)
-  .replace('href="icon.svg"', `href="${basePath}icon.svg"`);
+// src/index.html references these relatively, because the dev server's HTML
+// bundler resolves every <link href> from disk and cannot be told to skip an
+// absolute one. Relative hrefs would 404 on any route deeper than the base
+// (/budget2.0/month/2026-09 resolves them against /budget2.0/month/), so
+// rewrite them absolute here. At "/" each replacement is a no-op.
+for (const asset of ["manifest.webmanifest", "icon.svg"]) {
+  indexHtml = indexHtml.replace(`href="${asset}"`, `href="${basePath}${asset}"`);
+}
 await Bun.write(path.join(outdir, "index.html"), indexHtml);
 
 // GitHub Pages has no rewrite rules, so a deep link on a cold load lands on

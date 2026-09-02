@@ -1,41 +1,163 @@
 @import "../styles/globals.css";
 
-/*
- * Design contract tokens (Tasks 18-23).
- * See .superpowers/sdd/2026-09-01-budget-app/design-contract.md
- *
- * Namespaced as --budget-accent (not --accent): shadcn already defines a
- * bare --accent/--accent-foreground pair in styles/globals.css for hover
- * backgrounds on outline/ghost buttons, select items, badges, and the
- * dialog close button. A same-named override here would repaint that
- * background without repainting its paired foreground, breaking contrast
- * on every one of those controls. None of the other five tokens below
- * collide with a shadcn token name (checked against styles/globals.css).
- *
- * Unlayered (not inside @layer base) so these predictably win the cascade
- * over anything layered added later, without needing !important.
- */
-:root {
-  --paper: #f2f4f6; /* cool statement-paper ground, NOT cream */
-  --ink: #16212b; /* ink navy, primary text */
-  --rule: #d8dee4; /* hairlines, table borders */
-  --budget-accent: #0f6e63; /* muted teal: links, primary actions, spend fill */
-  --surplus: #2f6f4e; /* carried-forward surplus */
-  --overspend: #a6402b; /* ochre-red: negative balances only */
+/* The @font-face rules are deliberately NOT here. Bun's CSS bundler resolves
+   every url() from disk and inlines woff2 as base64 — relative OR absolute,
+   and `loader: { ".woff2": "file" }` does not change it. That made this file
+   303 KB of render-blocking bytes and defeated the unicode-range subsetting,
+   since a subset embedded in the stylesheet downloads whether or not one
+   character needs it. They live in src/fontCss.ts and are injected at boot by
+   src/frontend.tsx, which is the only arrangement that is identical in dev and
+   in a subpath production build without a placeholder file. The cost is that
+   the faces are requested after the JS parses rather than from the HTML;
+   `font-display: swap` keeps text readable throughout. */
 
-  --font-display: ui-sans-serif, "Segoe UI Variable Display", system-ui, sans-serif;
-  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-money: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", monospace;
+/*
+ * ============================================================================
+ * Budget 2.0 design foundation
+ * ============================================================================
+ *
+ * Two layers, deliberately separate:
+ *
+ *   1. `--budget-*` semantic tokens, defined once per theme below. These are
+ *      the app's own vocabulary — paper, ink, rule, surplus, overspend — and
+ *      are the ONLY colours the app's own components should name.
+ *   2. shadcn's variable set, pointed at layer 1. Re-theming shadcn rather
+ *      than fighting it means every primitive (dialog, select, badge, button)
+ *      inherits both themes for free.
+ *
+ * WHY THE PAIRS MATTER. CLAUDE.md's rule is "never define a bare `--accent`",
+ * and it was paid for with an app-wide contrast bug: shadcn uses `--accent` as
+ * a hover BACKGROUND and `--accent-foreground` as the text on it, so setting
+ * one without the other repaints the background and leaves the text behind.
+ * Every shadcn pair below is therefore redefined TOGETHER, in both themes.
+ *
+ * The brand teal is `--primary`, NOT `--accent`. That is the mapping the
+ * earlier bug got wrong: shadcn's `--accent` is a subtle hover tint, and a
+ * saturated teal there turns every hover into a coloured slab with dark text
+ * on it. `--accent` stays a tint of the surface.
+ *
+ * Every text pair here was measured, not eyeballed: the weakest is 5.50:1
+ * (muted on paper, light theme) against a 4.5:1 requirement, and field
+ * borders clear the 3:1 non-text requirement on both of their backgrounds.
+ */
+
+:root {
+  /* --- Layer 1: the app's own vocabulary (light) --- */
+  --budget-paper: #f3f5f7; /* page ground: cool statement paper, NOT cream */
+  --budget-raised: #ffffff; /* cards and rows sitting above the paper */
+  --budget-ink: #16212b; /* primary text: ink navy, not black */
+  --budget-ink-muted: #546575; /* labels, captions, secondary figures */
+  --budget-rule: #dce3e9; /* hairlines between rows */
+  --budget-rule-strong: #768899; /* field borders; needs 3:1, hairlines do not */
+  --budget-accent: #0d6b60; /* muted teal: links, primary actions, spend fill */
+  --budget-accent-ink: #ffffff; /* text ON the teal */
+  --budget-tint: #e8edf1; /* hover wash, table header fill */
+  --surplus: #1f6640; /* carried-forward surplus */
+  --overspend: #a5382a; /* negative balances only */
+
+  /* Elevation is light and cool, never a grey drop shadow. */
+  --budget-shadow-card: 0 1px 2px rgb(22 33 43 / 0.04), 0 8px 24px -12px rgb(22 33 43 / 0.12);
+  --budget-shadow-raised: 0 1px 1px rgb(22 33 43 / 0.05), 0 2px 6px -2px rgb(22 33 43 / 0.08);
+
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-money: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* --- Layer 2: shadcn, pointed at layer 1. Pairs, always. --- */
+  --radius: 0.5rem; /* crisper than shadcn's 0.625rem default */
+
+  --background: var(--budget-paper);
+  --foreground: var(--budget-ink);
+  --card: var(--budget-raised);
+  --card-foreground: var(--budget-ink);
+  --popover: var(--budget-raised);
+  --popover-foreground: var(--budget-ink);
+  --primary: var(--budget-accent);
+  --primary-foreground: var(--budget-accent-ink);
+  --secondary: var(--budget-tint);
+  --secondary-foreground: var(--budget-ink);
+  --muted: var(--budget-tint);
+  --muted-foreground: var(--budget-ink-muted);
+  --accent: var(--budget-tint); /* a TINT. see the note above. */
+  --accent-foreground: var(--budget-ink); /* its pair, never omitted. */
+  --destructive: var(--overspend);
+  --border: var(--budget-rule);
+  --input: var(--budget-rule-strong);
+  --ring: var(--budget-accent);
+}
+
+.dark {
+  /* --- Layer 1 (dark). Deep slate, never pure black: a pure-black ground
+         makes the hairlines and the carry meter float. --- */
+  --budget-paper: #0c1319;
+  --budget-raised: #141e28;
+  --budget-ink: #e8eef4;
+  --budget-ink-muted: #94a7b8;
+  --budget-rule: #22303e;
+  --budget-rule-strong: #647c92;
+  --budget-accent: #3ab5a4; /* lifted: the light teal is unreadable on slate */
+  --budget-accent-ink: #08110f; /* dark text on the lifted teal, not white */
+  --budget-tint: #1c2836;
+  --surplus: #57bb83;
+  --overspend: #f0866a;
+
+  /* Dark elevation reads as a lighter surface plus a hairline, not a shadow:
+     shadows are invisible on a dark ground. */
+  --budget-shadow-card: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 12px 32px -16px rgb(0 0 0 / 0.7);
+  --budget-shadow-raised: 0 1px 0 rgb(255 255 255 / 0.03) inset;
+
+  /* --- Layer 2 (dark). Same pairs, same rule. --- */
+  --background: var(--budget-paper);
+  --foreground: var(--budget-ink);
+  --card: var(--budget-raised);
+  --card-foreground: var(--budget-ink);
+  --popover: var(--budget-raised);
+  --popover-foreground: var(--budget-ink);
+  --primary: var(--budget-accent);
+  --primary-foreground: var(--budget-accent-ink);
+  --secondary: var(--budget-tint);
+  --secondary-foreground: var(--budget-ink);
+  --muted: var(--budget-tint);
+  --muted-foreground: var(--budget-ink-muted);
+  --accent: var(--budget-tint);
+  --accent-foreground: var(--budget-ink);
+  --destructive: var(--overspend);
+  --border: var(--budget-rule);
+  --input: var(--budget-rule-strong);
+  --ring: var(--budget-accent);
+}
+
+/* Makes `font-sans` / `font-mono` utilities and shadcn primitives inherit the
+   shipped faces instead of the OS stack. */
+@theme inline {
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-money);
+  --color-budget-accent: var(--budget-accent);
+  --color-budget-paper: var(--budget-paper);
+  --color-budget-raised: var(--budget-raised);
+  --color-budget-rule: var(--budget-rule);
+  --color-budget-ink: var(--budget-ink);
+  --color-budget-ink-muted: var(--budget-ink-muted);
+  --color-surplus: var(--surplus);
+  --color-overspend: var(--overspend);
 }
 
 @layer base {
   :root {
-    @apply font-sans;
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
   }
 
   body {
-    @apply grid place-items-center min-w-[320px] min-h-screen relative m-0 bg-background text-foreground;
+    /* Was `grid place-items-center`, which centred short pages VERTICALLY —
+       the month view floated in the middle of the viewport on an empty month.
+       The app shell owns horizontal centring now, with a max width. */
+    @apply m-0 min-w-[320px] min-h-screen bg-background text-foreground antialiased;
     font-family: var(--font-body);
+    font-feature-settings: "cv11"; /* Inter's single-storey a-alternates off */
   }
 
   h1,
@@ -45,16 +167,28 @@
   h5,
   h6 {
     font-family: var(--font-display);
-    font-weight: 650;
-    letter-spacing: -0.02em;
+    font-weight: 640;
+    letter-spacing: -0.019em;
+    text-wrap: balance;
+  }
+
+  /* One visible, consistent focus treatment. Keyboard users get a ring on the
+     accent colour, which clears 3:1 on every surface in both themes. */
+  :focus-visible {
+    outline: 2px solid var(--budget-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 }
 
 @layer utilities {
-  /* Applied to every money figure: mono face, tabular digits. */
+  /* Applied to every money figure: mono face, tabular digits so columns of
+     numbers align on the decimal without a monospaced layout everywhere. */
   .font-money {
     font-family: var(--font-money);
     font-variant-numeric: tabular-nums;
+    font-feature-settings: "zero"; /* slashed zero: 0 vs O at a glance */
+    letter-spacing: -0.01em;
   }
 
   .text-overspend {
@@ -63,6 +197,14 @@
 
   .text-surplus {
     color: var(--surplus);
+  }
+
+  /* The one card treatment, so elevation cannot drift screen to screen. */
+  .budget-card {
+    background: var(--budget-raised);
+    border: 1px solid var(--budget-rule);
+    border-radius: var(--radius);
+    box-shadow: var(--budget-shadow-card);
   }
 }
 
@@ -80,5 +222,6 @@
   ::before,
   ::after {
     animation: none !important;
+    transition: none !important;
   }
 }

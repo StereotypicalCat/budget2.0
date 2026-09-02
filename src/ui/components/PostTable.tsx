@@ -26,7 +26,7 @@ interface Props {
  *   - --surplus       : carried-in surplus (omitted when carriedIn <= 0)
  *   - --budget-accent : spend within this month's allocation, filled from
  *                       the track's left edge
- *   - --rule          : the unspent remainder of the allocation track
+ *   - --budget-rule   : the unspent remainder of the allocation track
  *   - --overspend     : spend beyond the allocation, past the track's end
  */
 function carryMeterBackground(figures: PostMonthFigures): string {
@@ -34,7 +34,7 @@ function carryMeterBackground(figures: PostMonthFigures): string {
   const scale = surplus + Math.max(figures.allocation, figures.charges);
 
   if (scale <= 0) {
-    return "var(--rule)";
+    return "var(--budget-rule)";
   }
 
   const pSurplus = (surplus / scale) * 100;
@@ -45,7 +45,7 @@ function carryMeterBackground(figures: PostMonthFigures): string {
     `linear-gradient(to right, ` +
     `var(--surplus) 0%, var(--surplus) ${pSurplus}%, ` +
     `var(--budget-accent) ${pSurplus}%, var(--budget-accent) ${pFillEnd}%, ` +
-    `var(--rule) ${pFillEnd}%, var(--rule) ${pTrackEnd}%, ` +
+    `var(--budget-rule) ${pFillEnd}%, var(--budget-rule) ${pTrackEnd}%, ` +
     `var(--overspend) ${pTrackEnd}%, var(--overspend) 100%)`
   );
 }
@@ -64,20 +64,20 @@ export function PostTable({ monthId, baseCurrency, rows, onChangeRule }: Props) 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="border-b text-left text-muted-foreground">
-          <tr>
-            <th className="py-2">Post</th>
-            <th className="py-2 pl-6 text-right">Carried in</th>
-            <th className="py-2 pl-6 text-right">Allocated</th>
-            <th className="py-2 pl-6 text-right">Spent</th>
-            <th className="py-2 pl-6 text-right">Remaining</th>
+        <thead className="text-left">
+          <tr className="border-b border-budget-rule text-[0.6875rem] uppercase tracking-wider text-budget-ink-muted">
+            <th className="py-2 font-medium">Post</th>
+            <th className="py-2 pl-6 text-right font-medium">Carried in</th>
+            <th className="py-2 pl-6 text-right font-medium">Allocated</th>
+            <th className="py-2 pl-6 text-right font-medium">Spent</th>
+            <th className="py-2 pl-6 text-right font-medium">Remaining</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(({ post, figures, overridden }) => (
             <Fragment key={post.id}>
-              <tr>
-                <td className="py-2">
+              <tr className="group transition-colors hover:bg-accent/60">
+                <td className="py-2.5">
                   <Link to={`/post/${post.id}/month/${monthId}`} className="hover:underline">
                     {post.name}
                   </Link>
@@ -111,7 +111,7 @@ export function PostTable({ monthId, baseCurrency, rows, onChangeRule }: Props) 
                   {onChangeRule && (
                     <button
                       type="button"
-                      className="ml-2 text-xs text-muted-foreground underline decoration-dotted"
+                      className="ml-2 rounded text-xs text-budget-ink-muted underline decoration-dotted underline-offset-2 opacity-0 transition-opacity hover:text-budget-accent focus-visible:opacity-100 group-hover:opacity-100"
                       onClick={() => onChangeRule(post.id)}
                     >
                       change from here
@@ -119,7 +119,7 @@ export function PostTable({ monthId, baseCurrency, rows, onChangeRule }: Props) 
                   )}
                 </td>
                 <td
-                  className={`font-money py-2 pl-6 text-right ${
+                  className={`font-money py-2.5 pl-6 text-right ${
                     figures.carriedIn > 0
                       ? "text-surplus"
                       : figures.carriedIn < 0
@@ -129,14 +129,14 @@ export function PostTable({ monthId, baseCurrency, rows, onChangeRule }: Props) 
                 >
                   {formatSignedMoney(figures.carriedIn, baseCurrency)}
                 </td>
-                <td className="font-money py-2 pl-6 text-right">
+                <td className="font-money py-2.5 pl-6 text-right">
                   {formatMoney(figures.allocation, baseCurrency)}
                 </td>
-                <td className="font-money py-2 pl-6 text-right">
+                <td className="font-money py-2.5 pl-6 text-right">
                   {formatMoney(figures.charges, baseCurrency)}
                 </td>
                 <td
-                  className={`font-money py-2 pl-6 text-right font-medium ${
+                  className={`font-money py-2.5 pl-6 text-right font-medium ${
                     figures.remaining < 0 ? "text-overspend" : ""
                   }`}
                 >

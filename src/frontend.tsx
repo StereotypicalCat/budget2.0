@@ -13,6 +13,14 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import { App } from "./ui/App.tsx";
 import { store } from "./store/index.ts";
+import { buildFontCss } from "./fontCss.ts";
+import { BASE_PATH } from "./ui/basePath.ts";
+
+// Injected rather than imported: see the note in src/index.css. Done before
+// the store loads so the faces are already in flight while IndexedDB is read.
+const fontStyle = document.createElement("style");
+fontStyle.textContent = buildFontCss(BASE_PATH);
+document.head.appendChild(fontStyle);
 
 const container = document.getElementById("root") ?? document.body;
 

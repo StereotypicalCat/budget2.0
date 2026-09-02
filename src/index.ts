@@ -2,6 +2,7 @@ import { serve } from "bun";
 import index from "./index.html";
 import { normalizeBase } from "./ui/basePath.ts";
 import { buildManifest } from "./manifest.ts";
+import { FONT_FILES } from "./fontCss.ts";
 
 const basePath = normalizeBase(process.env.BUN_PUBLIC_BASE_PATH);
 
@@ -39,6 +40,17 @@ const server = serve({
       new Response("/* dev: intentionally does nothing */\n", {
         headers: { "content-type": "text/javascript", "cache-control": "no-cache" },
       }),
+    // The @font-face rules are injected by frontend.tsx; these serve the
+    // files those rules point at.
+    ...Object.fromEntries(
+      FONT_FILES.map((file) => [
+        `${basePath}fonts/${file}`,
+        () =>
+          new Response(Bun.file(new URL(`./fonts/${file}`, import.meta.url)), {
+            headers: { "content-type": "font/woff2", "cache-control": "no-cache" },
+          }),
+      ]),
+    ),
     "/*": index,
   },
   development: process.env.NODE_ENV !== "production" && {

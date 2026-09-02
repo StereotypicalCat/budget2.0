@@ -11,6 +11,7 @@ import {
 } from "../../../export/json.ts";
 import { buildOds, odsFilename } from "../../../export/ods.ts";
 import type { Dataset } from "../../../domain/types.ts";
+import { Section } from "../../components/Section.tsx";
 
 export function DataSection() {
   const dataset = useDataset();
@@ -93,12 +94,10 @@ export function DataSection() {
   const counts = describeDataset(dataset);
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-lg font-medium">Your data</h2>
-      <p className="text-xs text-muted-foreground">
-        Everything lives in this browser. Export regularly — it is both your
-        backup and how you move your budget to another device.
-      </p>
+    <Section
+      title="Your data"
+      hint="Everything lives in this browser. Export regularly — it is both your backup and how you move your budget to another device."
+    >
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={exportJson}>
@@ -148,6 +147,6 @@ export function DataSection() {
           </div>
         </div>
       )}
-    </section>
+    </Section>
   );
 }
