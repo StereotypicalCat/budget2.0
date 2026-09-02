@@ -180,3 +180,28 @@ test("get before load throws rather than returning empty data", () => {
   const store = createSnapshotStore(fake.persistence, "2026-09");
   expect(() => store.get()).toThrow(/not loaded/i);
 });
+
+describe("seed rates", () => {
+  test("a first run seeds the rates it was given", async () => {
+    const fake = fakePersistence(null);
+    const rates = [
+      { currency: "EUR" as const, baseUnitsPerOne: 7.474959, updatedAt: "2026-09-01", source: "manual" as const },
+    ];
+    const store = createSnapshotStore(fake.persistence, "2026-09", rates);
+    await store.load();
+    expect(store.get().fxRates).toEqual(rates);
+  });
+
+  test("an existing dataset is never given seed rates", async () => {
+    // Loading stored data must not touch fxRates — the user may have
+    // deliberately cleared one, and re-adding it would convert money at a
+    // number they never chose.
+    const stored = createSeedDataset("2026-01");
+    const fake = fakePersistence(stored);
+    const store = createSnapshotStore(fake.persistence, "2026-09", [
+      { currency: "EUR", baseUnitsPerOne: 7.474959, updatedAt: "2026-09-01", source: "manual" },
+    ]);
+    await store.load();
+    expect(store.get().fxRates).toEqual([]);
+  });
+});

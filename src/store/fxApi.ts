@@ -13,7 +13,12 @@ export function buildFxUrl(
     .replace("{targets}", targets.join(","));
 }
 
-export function parseFxResponse(body: unknown, base: Currency): FxRate[] {
+export function parseFxResponse(
+  body: unknown,
+  base: Currency,
+  /** Defaults to now. The build passes its own date when baking rates in. */
+  updatedAt: string = new Date().toISOString(),
+): FxRate[] {
   const rates =
     typeof body === "object" && body !== null
       ? (body as Record<string, unknown>).rates
@@ -22,7 +27,6 @@ export function parseFxResponse(body: unknown, base: Currency): FxRate[] {
     throw new Error("Exchange rate response has no `rates` object");
   }
 
-  const updatedAt = new Date().toISOString();
   const out: FxRate[] = [];
 
   for (const [currency, value] of Object.entries(rates as Record<string, unknown>)) {

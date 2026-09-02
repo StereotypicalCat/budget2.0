@@ -38,3 +38,11 @@ describe("parseFxResponse", () => {
     expect(() => parseFxResponse({ rates: { EUR: 0 } }, "DKK")).toThrow(/EUR/);
   });
 });
+
+test("an explicit updatedAt is used instead of the clock", () => {
+  // The build bakes rates in with the BUILD date, not the date the browser
+  // happens to run parseFxResponse.
+  const rates = parseFxResponse({ rates: { EUR: 0.13378, USD: 0.15505 } }, "DKK", "2026-09-01");
+  expect(rates.map((r) => r.updatedAt)).toEqual(["2026-09-01", "2026-09-01"]);
+  expect(rates.every((r) => r.source === "api")).toBe(true);
+});

@@ -3,10 +3,69 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { normalizeBase } from "./src/ui/basePath.ts";
 import { buildManifest } from "./src/manifest.ts";
+import { buildFxUrl, parseFxResponse, DEFAULT_FX_API_URL } from "./src/store/fxApi.ts";
+import { FALLBACK_FX_RATES } from "./src/store/bakedRates.ts";
+import type { Currency, FxRate } from "./src/domain/types.ts";
 
 const basePath = normalizeBase(process.env.BUN_PUBLIC_BASE_PATH);
 const outdir = path.join(process.cwd(), "dist");
 const version = process.env.BUILD_VERSION ?? String(Date.now());
+
+const FX_BASE: Currency = "DKK";
+const FX_TARGETS: Currency[] = ["USD", "EUR"];
+const FX_TIMEOUT_MS = 8_000;
+
+/**
+ * Exchange rates embedded at build time so a fresh install can convert a EUR
+ * purchase on day one instead of erroring. They seed a new dataset only — see
+ * src/store/bakedRates.ts for why they must never backstop a missing rate.
+ *
+ * A network failure must NOT fail the build: it falls back to the committed
+ * constants, which are labelled "manual" so Settings never claims a hardcoded
+ * number came from a rate service. Fetched rates carry the build date rather
+ * than the date the browser happens to run, which is why parseFxResponse
+ * takes an explicit `updatedAt`.
+ *
+ * SKIP_FX_FETCH=1 forces the constants, for offline or reproducible builds.
+ * FX_API_URL overrides the endpoint.
+ */
+async function bakeFxRates(): Promise<readonly FxRate[]> {
+  const buildDate = new Date().toISOString().slice(0, 10);
+  const describe = (rates: readonly FxRate[]) =>
+    rates.map((r) => `${r.currency} ${r.baseUnitsPerOne}`).join(", ");
+
+  if (process.env.SKIP_FX_FETCH === "1") {
+    console.log(`Baking the committed FX constants (SKIP_FX_FETCH=1): ${describe(FALLBACK_FX_RATES)}`);
+    return FALLBACK_FX_RATES;
+  }
+
+  const template = process.env.FX_API_URL ?? DEFAULT_FX_API_URL;
+  try {
+    const response = await fetch(buildFxUrl(template, FX_BASE, FX_TARGETS), {
+      signal: AbortSignal.timeout(FX_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(`rate service returned ${response.status}`);
+
+    const rates = parseFxResponse(await response.json(), FX_BASE, buildDate);
+    // A partial response would leave one currency unconvertible on a fresh
+    // install, which is the whole problem this solves. Prefer the complete
+    // constants over an incomplete live answer.
+    const covered = new Set(rates.map((r) => r.currency));
+    const missing = FX_TARGETS.filter((c) => !covered.has(c));
+    if (missing.length > 0) throw new Error(`response omitted ${missing.join(", ")}`);
+
+    console.log(`Baked live FX rates for ${buildDate}: ${describe(rates)}`);
+    return rates;
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    console.warn(
+      `Could not fetch FX rates (${message}); baking the committed constants instead: ${describe(FALLBACK_FX_RATES)}`,
+    );
+    return FALLBACK_FX_RATES;
+  }
+}
+
+const bakedFxRates = await bakeFxRates();
 
 await rm(outdir, { recursive: true, force: true });
 
@@ -44,6 +103,9 @@ const result = await Bun.build({
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
     "process.env.BUN_PUBLIC_BASE_PATH": JSON.stringify(basePath),
+    // Double-encoded on purpose: the inlined literal must be a JSON *string*
+    // for parseBakedRates to parse at runtime.
+    "process.env.BUN_PUBLIC_BAKED_FX_RATES": JSON.stringify(JSON.stringify(bakedFxRates)),
   },
 });
 
