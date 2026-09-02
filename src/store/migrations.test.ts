@@ -109,8 +109,29 @@ describe("v1 -> v2: rules become a dated series", () => {
     }
   });
 
-  test("a v1 post with no posts at all migrates without throwing", () => {
+  test("an empty posts array migrates without throwing", () => {
     const empty = { ...v1Dataset(), posts: [] };
     expect(migrate(empty).posts).toEqual([]);
+  });
+
+  test("a v1 post with no standingRule at all migrates to an empty rules array, not a version wrapping undefined", () => {
+    const dataset = v1Dataset();
+    dataset.posts.push({
+      id: "unbudgeted",
+      name: "Unbudgeted",
+      order: 2,
+      archived: false,
+      currency: "DKK",
+    } as any);
+
+    const migrated = migrate(dataset);
+
+    const unbudgeted = migrated.posts.find((p) => p.id === "unbudgeted")!;
+    expect(unbudgeted.rules).toEqual([]);
+
+    // The missing field on one post must not contaminate its siblings.
+    expect(migrated.posts[0]!.rules).toEqual([
+      { from: "2026-01", rule: { kind: "percentOfIncome", percent: 20 } },
+    ]);
   });
 });
