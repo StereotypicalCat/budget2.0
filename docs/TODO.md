@@ -8,13 +8,14 @@ decisions behind it are in `docs/specs/` — one spec per sub-project,
 each recording the alternatives that were rejected. Rules that outlived their
 task moved to `AGENTS.md`.
 
-**Current state:** merged to `main`. 452 tests passing,
+**Current state:** merged to `main`. 457 tests passing,
 `bunx tsc --noEmit` clean, `bun run build` succeeds on both the live-fetch and
 offline paths.
 
-**Schema is at version 3.** v1 -> v2 made allocation rules a dated series;
-v2 -> v3 moved currencies into the dataset. Both migrations are
-behaviour-preserving by construction and tested as such.
+**Schema is at version 4.** v1 -> v2 made allocation rules a dated series;
+v2 -> v3 moved currencies into the dataset; v3 -> v4 drops a stored rate-service
+URL that can no longer work. All three are behaviour-preserving by construction
+— not one changes a stored figure — and are tested as such.
 
 ---
 

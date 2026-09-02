@@ -1,5 +1,6 @@
 import { SCHEMA_VERSION } from "../domain/seed.ts";
 import { SEED_CURRENCIES } from "../domain/types.ts";
+import { STALE_FX_API_URL } from "./fxApi.ts";
 import type { Dataset } from "../domain/types.ts";
 
 export class UnsupportedSchemaError extends Error {
@@ -56,6 +57,31 @@ const MIGRATIONS: Array<(data: any) => any> = [
       ? data.currencies
       : SEED_CURRENCIES.map((currency) => ({ ...currency })),
   }),
+
+  // 3 -> 4: drop a stored rate-service URL that can no longer work.
+  // api.frankfurter.app now answers every request with a 301 to
+  // api.frankfurter.dev/v1, and because that redirect carries no CORS headers
+  // a browser refuses to follow it — so "Fetch rates now" failed with nothing
+  // but a CORS error to go on. Changing the default fixes a dataset that never
+  // stored the URL; this fixes one that did.
+  //
+  // The field is REMOVED rather than rewritten to the new endpoint, so the
+  // dataset follows whatever the current default is and a future move of the
+  // service needs no second migration for the same user. A URL the owner chose
+  // themselves is left strictly alone: only the exact dead default is dropped.
+  //
+  // No stored figure changes, so this cannot alter a single number in the
+  // budget.
+  (data: any) => {
+    const { fxApiUrl, ...settings } = data.settings ?? {};
+    return {
+      ...data,
+      settings:
+        fxApiUrl === STALE_FX_API_URL
+          ? { ...settings, schemaVersion: 4 }
+          : { ...data.settings, schemaVersion: 4 },
+    };
+  },
 ];
 
 export function migrate(raw: unknown): Dataset {

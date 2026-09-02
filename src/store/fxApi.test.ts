@@ -7,8 +7,18 @@ const ALLOWED = ["DKK", "USD", "EUR"];
 describe("buildFxUrl", () => {
   test("substitutes the base and target placeholders", () => {
     expect(buildFxUrl(DEFAULT_FX_API_URL, "DKK", ["USD", "EUR"])).toBe(
-      "https://api.frankfurter.app/latest?from=DKK&to=USD,EUR",
+      "https://api.frankfurter.dev/v1/latest?from=DKK&to=USD,EUR",
     );
+  });
+
+  // Regression. api.frankfurter.app answers every request with a 301 to
+  // api.frankfurter.dev/v1, and a redirect response must itself carry
+  // Access-Control-Allow-Origin for a browser to follow it cross-origin. That
+  // 301 carries no CORS headers at all, so the fetch was blocked before the
+  // redirect could be taken: "Fetch rates now" failed on the deployed site
+  // with a bare CORS error and no indication that the endpoint had moved.
+  test("does not point at the host that only redirects", () => {
+    expect(DEFAULT_FX_API_URL).not.toContain("frankfurter.app");
   });
 });
 

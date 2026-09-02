@@ -166,7 +166,7 @@ describe("v2 -> v3: currencies become data", () => {
 
   test("the three shipped currencies are added, with their decimals", () => {
     const migrated = migrate(v2());
-    expect(migrated.settings.schemaVersion).toBe(3);
+    expect(migrated.settings.schemaVersion).toBe(SCHEMA_VERSION);
     expect(migrated.currencies).toEqual([
       { code: "DKK", digits: 2, symbol: "kr", name: "Danish krone" },
       { code: "USD", digits: 2, symbol: "$", name: "US dollar" },
@@ -196,7 +196,7 @@ describe("v2 -> v3: currencies become data", () => {
     expect(migrated.settings.foldStartMonth).toBe("2026-01");
   });
 
-  test("a v1 dataset migrates all the way through to v3", () => {
+  test("a v1 dataset migrates all the way through to the current version", () => {
     const v1 = {
       settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 1 },
       fxRates: [],
@@ -214,7 +214,7 @@ describe("v2 -> v3: currencies become data", () => {
       purchases: [],
     };
     const migrated = migrate(v1);
-    expect(migrated.settings.schemaVersion).toBe(3);
+    expect(migrated.settings.schemaVersion).toBe(SCHEMA_VERSION);
     expect(migrated.posts[0]!.rules).toEqual([
       { from: "2026-01", rule: { kind: "fixed", amount: { amount: 500, currency: "DKK" } } },
     ]);
@@ -231,5 +231,43 @@ describe("v2 -> v3: currencies become data", () => {
     data.currencies = [{ code: "DKK", digits: 2 }, { code: "JPY", digits: 0 }];
     const migrated = migrate(data);
     expect(migrated.currencies.map((c) => c.code)).toEqual(["DKK", "JPY"]);
+  });
+});
+
+describe("v3 -> v4: the stale rate-service URL is dropped", () => {
+  const v3 = (fxApiUrl?: string) => ({
+    settings: {
+      baseCurrency: "DKK",
+      foldStartMonth: "2026-01",
+      schemaVersion: 3,
+      ...(fxApiUrl === undefined ? {} : { fxApiUrl }),
+    },
+    currencies: [{ code: "DKK", digits: 2 }],
+    fxRates: [],
+    posts: [],
+    months: [],
+    purchases: [],
+  });
+
+  const STALE = "https://api.frankfurter.app/latest?from={base}&to={targets}";
+
+  test("a dataset holding the dead default loses the field entirely", () => {
+    const out = migrate(v3(STALE));
+    expect(out.settings.schemaVersion).toBe(4);
+    // Removed rather than rewritten to the new URL, so the dataset follows
+    // whatever the current default is and a future endpoint move needs no
+    // second migration for the same user.
+    expect("fxApiUrl" in out.settings).toBe(false);
+  });
+
+  test("a URL the owner chose themselves is left alone", () => {
+    const mine = "https://rates.example.com/v2?base={base}&want={targets}";
+    expect(migrate(v3(mine)).settings.fxApiUrl).toBe(mine);
+  });
+
+  test("a dataset that never stored a URL is untouched apart from the version", () => {
+    const out = migrate(v3());
+    expect("fxApiUrl" in out.settings).toBe(false);
+    expect(out.settings.schemaVersion).toBe(4);
   });
 });

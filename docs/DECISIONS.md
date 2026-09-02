@@ -18,7 +18,7 @@ record.
   no household mode. → [`PRODUCT.md`](PRODUCT.md)
 - **Schema migrations are mandatory, not optional.** `schemaVersion` plus
   ordered migration functions applied on load, because IndexedDB holds the
-  user's only copy of their financial data. Now at version 3.
+  user's only copy of their financial data. Now at version 4.
   → [`specs/2026-09-01-budget-app-design.md`](specs/2026-09-01-budget-app-design.md)
 - **A destructive write downloads a backup first.** Import and reset both export
   before replacing, and abort if the export fails. → commit `ac3d18a`
@@ -129,6 +129,18 @@ record.
   chose. On a network failure the build falls back to committed constants marked
   `source: "manual"`, so Settings never claims a hardcoded number came from an
   API. → commit `b4e1933`
+- **The rate service must be a host that answers directly, not one that
+  redirects.** `api.frankfurter.app` began 301-ing to `api.frankfurter.dev/v1`,
+  and a redirect response has to carry `Access-Control-Allow-Origin` itself for
+  a browser to follow it cross-origin — that 301 carries none, so "Fetch rates
+  now" died with only a CORS error to go on. The build-time fetch never noticed,
+  because a server-side fetch follows redirects freely. → commit history, and
+  `src/store/fxApi.ts`
+- **The v3 -> v4 migration DROPS the stale URL rather than rewriting it** to the
+  new endpoint, so a dataset that stored it follows whatever the current default
+  is and the next move of the service needs no second migration for the same
+  user. A URL the owner chose themselves is left strictly alone.
+  → `src/store/migrations.ts`
 - **ODS export is generated client-side with `fflate`.** No server exists to
   generate it. → [`specs/2026-09-01-budget-app-design.md`](specs/2026-09-01-budget-app-design.md)
 - **Base path is a build-time variable, read through a `try/catch` accessor.**

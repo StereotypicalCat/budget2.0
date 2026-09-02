@@ -1,7 +1,18 @@
 import type { Currency, FxRate } from "../domain/types.ts";
 
-/** Frankfurter needs no API key. The URL is user-editable in settings. */
-export const DEFAULT_FX_API_URL = "https://api.frankfurter.app/latest?from={base}&to={targets}";
+/**
+ * Frankfurter needs no API key. The URL is user-editable in settings.
+ *
+ * Must be the `.dev/v1` host. `api.frankfurter.app` answers every request with
+ * a 301 here, and a redirect response has to carry Access-Control-Allow-Origin
+ * itself for a browser to follow it cross-origin — that 301 carries no CORS
+ * headers, so the request dies before the redirect is taken.
+ */
+export const DEFAULT_FX_API_URL =
+  "https://api.frankfurter.dev/v1/latest?from={base}&to={targets}";
+
+/** The URL above until 2026-09; see the 3 -> 4 migration, which drops it. */
+export const STALE_FX_API_URL = "https://api.frankfurter.app/latest?from={base}&to={targets}";
 
 export function buildFxUrl(
   template: string,
