@@ -1,6 +1,7 @@
-import type { Dataset, FxRate, MonthId, Post } from "./types.ts";
+import { SEED_CURRENCIES } from "./types.ts";
+import type { CurrencyDef, Dataset, FxRate, MonthId, Post } from "./types.ts";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 const SEED_POST_NAMES = ["Video Games", "Food", "Events and Social"] as const;
 
@@ -17,6 +18,7 @@ export function newId(): string {
 export function createSeedDataset(
   startMonth: MonthId,
   fxRates: readonly FxRate[] = [],
+  currencies: readonly CurrencyDef[] = SEED_CURRENCIES,
 ): Dataset {
   const posts: Post[] = SEED_POST_NAMES.map((name, order) => ({
     id: newId(),
@@ -36,7 +38,8 @@ export function createSeedDataset(
       schemaVersion: SCHEMA_VERSION,
     },
     // Copied, so a caller passing shared constants cannot have them edited
-    // out from under it the first time the user changes a rate.
+    // out from under it the first time the user changes a rate or a currency.
+    currencies: currencies.map((currency) => ({ ...currency })),
     fxRates: fxRates.map((rate) => ({ ...rate })),
     posts,
     months: [

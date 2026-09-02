@@ -1,4 +1,4 @@
-import { CURRENCIES, type Currency, type Dataset, type MonthId } from "../domain/types.ts";
+import type { Currency, CurrencyDef, Dataset, MonthId } from "../domain/types.ts";
 import { migrate } from "../store/migrations.ts";
 
 export class ImportValidationError extends Error {
@@ -36,11 +36,80 @@ const MONTH_ID = /^\d{4}-(0[1-9]|1[0-2])$/;
  */
 const PURCHASE_DATE = /^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/;
 
-function requireCurrency(value: unknown, where: string): Currency {
-  if (!CURRENCIES.includes(value as Currency)) {
-    throw new ImportValidationError(`Unsupported currency ${String(value)} in ${where}`);
+/**
+ * `Currency` is an open string now, so this — not the type system — is what
+ * stops a code the dataset never defined reaching the fold, where it would
+ * throw MissingRateError or round at a guessed number of decimals.
+ */
+function requireCurrency(
+  value: unknown,
+  where: string,
+  defined: ReadonlySet<Currency>,
+): Currency {
+  if (typeof value !== "string" || !defined.has(value)) {
+    throw new ImportValidationError(
+      `Unsupported currency ${String(value)} in ${where}. Define it under Settings first.`,
+    );
   }
-  return value as Currency;
+  return value;
+}
+
+/** Codes are identity: they key the FX table and every stored Money. */
+const CURRENCY_CODE = /^[A-Z]{2,8}$/;
+
+/**
+ * Validates the currency table itself, before anything is checked against it.
+ * A table with a duplicate code would make `digitsFor` resolve arbitrarily,
+ * and a non-integer or absurd `digits` would round money to nonsense.
+ */
+function requireCurrencyTable(data: Record<string, unknown>): CurrencyDef[] {
+  const raw = data.currencies;
+  if (!Array.isArray(raw)) {
+    throw new ImportValidationError('Dataset field "currencies" is missing or not an array');
+  }
+  if (raw.length === 0) {
+    throw new ImportValidationError("A dataset must define at least one currency");
+  }
+
+  const seen = new Set<string>();
+  const table: CurrencyDef[] = [];
+
+  for (const entry of raw as Array<Record<string, unknown>>) {
+    const code = entry?.code;
+    if (typeof code !== "string" || !CURRENCY_CODE.test(code)) {
+      throw new ImportValidationError(
+        `Currency code ${JSON.stringify(code)} is not 2-8 uppercase letters`,
+      );
+    }
+    if (seen.has(code)) {
+      throw new ImportValidationError(
+        `Currency "${code}" is defined twice; which decimals apply would be arbitrary`,
+      );
+    }
+    seen.add(code);
+
+    const digits = entry.digits;
+    if (typeof digits !== "number" || !Number.isInteger(digits) || digits < 0 || digits > 4) {
+      throw new ImportValidationError(
+        `Currency "${code}" has invalid decimal places ${String(digits)}; expected an integer 0-4`,
+      );
+    }
+    if (entry.symbol !== undefined && typeof entry.symbol !== "string") {
+      throw new ImportValidationError(`Currency "${code}" has a non-string symbol`);
+    }
+    if (entry.name !== undefined && typeof entry.name !== "string") {
+      throw new ImportValidationError(`Currency "${code}" has a non-string name`);
+    }
+
+    table.push({
+      code,
+      digits,
+      ...(typeof entry.symbol === "string" ? { symbol: entry.symbol } : {}),
+      ...(typeof entry.name === "string" ? { name: entry.name } : {}),
+    });
+  }
+
+  return table;
 }
 
 function requireArray(data: Record<string, unknown>, key: string): unknown[] {
@@ -75,12 +144,14 @@ export function parseDatasetJson(text: string): Dataset {
   }
 
   const data = dataset as unknown as Record<string, unknown>;
+  const currencies = requireCurrencyTable(data);
+  const defined = new Set(currencies.map((currency) => currency.code));
   requireArray(data, "posts");
   requireArray(data, "months");
   requireArray(data, "purchases");
   requireArray(data, "fxRates");
 
-  requireCurrency(dataset.settings.baseCurrency, "settings.baseCurrency");
+  requireCurrency(dataset.settings.baseCurrency, "settings.baseCurrency", defined);
   if (!MONTH_ID.test(dataset.settings.foldStartMonth)) {
     throw new ImportValidationError(
       `Invalid foldStartMonth "${dataset.settings.foldStartMonth}"`,
@@ -89,7 +160,7 @@ export function parseDatasetJson(text: string): Dataset {
 
   const postIds = new Set(dataset.posts.map((p) => p.id));
   for (const post of dataset.posts) {
-    requireCurrency(post.currency, `post "${post.name}"`);
+    requireCurrency(post.currency, `post "${post.name}"`, defined);
 
     const rules = (post as unknown as Record<string, unknown>).rules;
     if (!Array.isArray(rules)) {
@@ -120,7 +191,7 @@ export function parseDatasetJson(text: string): Dataset {
         amount?: { currency?: unknown };
       };
       if (rule.kind === "fixed") {
-        requireCurrency(rule.amount?.currency, `post "${post.name}" rule from ${from}`);
+        requireCurrency(rule.amount?.currency, `post "${post.name}" rule from ${from}`, defined);
       } else if (rule.kind !== "percentOfIncome") {
         throw new ImportValidationError(
           `Post "${post.name}" has a rule from "${from}" of unknown kind "${String(rule.kind)}"`,
@@ -133,12 +204,12 @@ export function parseDatasetJson(text: string): Dataset {
     if (!MONTH_ID.test(month.id)) {
       throw new ImportValidationError(`Invalid month id "${month.id}"`);
     }
-    requireCurrency(month.income.currency, `month ${month.id} income`);
+    requireCurrency(month.income.currency, `month ${month.id} income`, defined);
   }
 
   for (const purchase of dataset.purchases) {
     const label = `purchase "${purchase.description}"`;
-    requireCurrency(purchase.total.currency, label);
+    requireCurrency(purchase.total.currency, label, defined);
 
     if (!PURCHASE_DATE.test(purchase.date)) {
       throw new ImportValidationError(`${label} has an invalid date "${purchase.date}"`);
@@ -163,7 +234,7 @@ export function parseDatasetJson(text: string): Dataset {
       if (!MONTH_ID.test(slice.month)) {
         throw new ImportValidationError(`${label} has invalid slice month "${slice.month}"`);
       }
-      requireCurrency(slice.amount.currency, `${label} slice ${slice.month}`);
+      requireCurrency(slice.amount.currency, `${label} slice ${slice.month}`, defined);
     }
   }
 

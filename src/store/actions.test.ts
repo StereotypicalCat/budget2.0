@@ -2,26 +2,30 @@ import { test, expect, describe } from "bun:test";
 import * as actions from "./actions.ts";
 import { createSeedDataset } from "../domain/seed.ts";
 import type { Dataset } from "../domain/types.ts";
-import { CURRENCY_DIGITS } from "../domain/types.ts";
 
 /**
- * Every currency this app supports today has 2 decimal places, so code that
- * hardcodes 2 is indistinguishable from code that reads CURRENCY_DIGITS. This
- * forces the table for one test, which is the only way to prove the table is
- * consulted without making the product decision to add a non-2dp currency.
+ * Digits now live in the dataset, so a currency with a different minor unit is
+ * expressed by DEFINING one — no monkey-patching a module constant, which is
+ * what this file used to need.
  */
-function withDigits(currency: "DKK" | "USD" | "EUR", digits: number, body: () => void) {
-  const original = CURRENCY_DIGITS[currency];
-  CURRENCY_DIGITS[currency] = digits;
+function withDigits(currency: string, digits: number, body: () => void) {
+  const original = zeroDigitDataset;
+  zeroDigitDataset = { currency, digits };
   try {
     body();
   } finally {
-    CURRENCY_DIGITS[currency] = original;
+    zeroDigitDataset = original;
   }
 }
+let zeroDigitDataset: { currency: string; digits: number } | null = null;
 
 function draft(): Dataset {
-  return createSeedDataset("2026-09");
+  const data = createSeedDataset("2026-09");
+  if (zeroDigitDataset) {
+    const target = data.currencies.find((c) => c.code === zeroDigitDataset!.currency);
+    if (target) target.digits = zeroDigitDataset.digits;
+  }
+  return data;
 }
 
 describe("months", () => {

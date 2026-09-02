@@ -15,7 +15,13 @@ export function PostMonthRoute() {
   const row = monthView(dataset, monthId).rows.find((r) => r.post.id === postId);
 
   const thisMonth = dataset.purchases.flatMap((purchase) => {
-    const charges = chargesForPurchaseInMonth(purchase, monthId, base, dataset.fxRates);
+    const charges = chargesForPurchaseInMonth(
+      purchase,
+      monthId,
+      base,
+      dataset.fxRates,
+      dataset.currencies,
+    );
     const mine = charges.find((c) => c.postId === postId);
     return mine ? [{ purchase, amount: mine.amount }] : [];
   });

@@ -70,7 +70,12 @@ describe("what baked rates are allowed to do", () => {
     const data = createSeedDataset("2026-09", FALLBACK_FX_RATES);
     data.fxRates = data.fxRates.filter((r) => r.currency !== "EUR");
     expect(() =>
-      toBase({ amount: 100, currency: "EUR" }, data.settings.baseCurrency, data.fxRates),
+      toBase(
+        { amount: 100, currency: "EUR" },
+        data.settings.baseCurrency,
+        data.fxRates,
+        data.currencies,
+      ),
     ).toThrow(MissingRateError);
   });
 });

@@ -2,6 +2,13 @@ import { test, expect, describe } from "bun:test";
 import { foldBalances, figuresFor } from "./fold.ts";
 import type { Dataset, Post, Purchase } from "./types.ts";
 
+/** Digits for the currencies these tests use; all real-world 2dp. */
+const TEST_CURRENCIES = [
+  { code: "DKK", digits: 2, symbol: "kr" },
+  { code: "USD", digits: 2, symbol: "$" },
+  { code: "EUR", digits: 2, symbol: "\u20ac" },
+];
+
 function post(id: string, fixed: number, archived = false): Post {
   return {
     id,
@@ -28,6 +35,7 @@ function spend(id: string, postId: string, amount: number, date: string): Purcha
 function dataset(posts: Post[], purchases: Purchase[]): Dataset {
   return {
     settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 1 },
+    currencies: TEST_CURRENCIES,
     fxRates: [],
     posts,
     months: [

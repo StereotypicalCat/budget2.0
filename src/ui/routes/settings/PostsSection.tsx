@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { useDataset } from "../../hooks/useDataset.ts";
 import { useMutate } from "../../hooks/useMutate.ts";
 import { addPost, movePost, setPostArchived, updatePost } from "../../../store/actions.ts";
-import { CURRENCIES, type Currency, type Post } from "../../../domain/types.ts";
+import type { Currency, Post } from "../../../domain/types.ts";
 import { ruleAt } from "../../../domain/allocation.ts";
 import { currentMonth } from "../../../store/index.ts";
 import { RuleHistory } from "../../components/RuleHistory.tsx";
@@ -72,7 +72,7 @@ export function PostsSection() {
                       mutate((draft) => updatePost(draft, post.id, { currency }));
                     }}
                   >
-                    {CURRENCIES.map((currency) => (
+                    {dataset.currencies.map(({ code: currency }) => (
                       <option key={currency} value={currency}>
                         {currency}
                       </option>

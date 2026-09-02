@@ -1,4 +1,6 @@
 import { Button } from "@/components/ui/button";
+import { useDataset } from "../hooks/useDataset.ts";
+import { digitsFor } from "../../domain/currencies.ts";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatAmount } from "../format.ts";
@@ -13,7 +15,7 @@ interface Props {
 }
 
 export function SplitEditor({ draft, posts, onChange }: Props) {
-  const balance = splitBalance(draft);
+  const balance = splitBalance(draft, digitsFor(useDataset().currencies, draft.currency));
   const unit = draft.splitMode === "percent" ? "%" : draft.currency;
 
   function updateSplit(index: number, changes: Partial<SplitDraft>) {

@@ -1,4 +1,5 @@
 import { SCHEMA_VERSION } from "../domain/seed.ts";
+import { SEED_CURRENCIES } from "../domain/types.ts";
 import type { Dataset } from "../domain/types.ts";
 
 export class UnsupportedSchemaError extends Error {
@@ -36,6 +37,24 @@ const MIGRATIONS: Array<(data: any) => any> = [
             : [{ from: data.settings.foldStartMonth, rule: standingRule }],
       };
     }),
+  }),
+
+  // 2 -> 3: currencies become data. Until now the three supported currencies
+  // and their decimal places were compile-time constants, so adding one meant
+  // changing code; they now live in the dataset, which is also what lets the
+  // owner define their own.
+  //
+  // Behaviour-preserving by construction: every currency that existed had two
+  // decimal places, and the seeded table records two, so not one stored amount
+  // can round differently than it did before. An existing `currencies` field
+  // is left alone rather than overwritten — a hand-edited file could already
+  // carry currencies the owner added, and discarding them would be data loss.
+  (data: any) => ({
+    ...data,
+    settings: { ...data.settings, schemaVersion: 3 },
+    currencies: Array.isArray(data.currencies)
+      ? data.currencies
+      : SEED_CURRENCIES.map((currency) => ({ ...currency })),
   }),
 ];
 

@@ -8,6 +8,13 @@ import {
 import { roundMoney } from "./money.ts";
 import type { Dataset, FxRate, Purchase } from "./types.ts";
 
+/** Digits for the currencies these tests use; all real-world 2dp. */
+const TEST_CURRENCIES = [
+  { code: "DKK", digits: 2, symbol: "kr" },
+  { code: "USD", digits: 2, symbol: "$" },
+  { code: "EUR", digits: 2, symbol: "\u20ac" },
+];
+
 const rates: FxRate[] = [
   { currency: "EUR", baseUnitsPerOne: 7.46, updatedAt: "2026-09-01", source: "manual" },
   { currency: "USD", baseUnitsPerOne: 6.9, updatedAt: "2026-09-01", source: "manual" },
@@ -28,7 +35,7 @@ function purchase(overrides: Partial<Purchase> = {}): Purchase {
 
 describe("splitPartsOfTotal", () => {
   test("a single split takes the whole total", () => {
-    expect(splitPartsOfTotal(purchase())).toEqual([200]);
+    expect(splitPartsOfTotal(purchase(), 2)).toEqual([200]);
   });
 
   test("percent mode divides proportionally", () => {
@@ -39,7 +46,8 @@ describe("splitPartsOfTotal", () => {
           { postId: "events", value: 40, absorbsRemainder: false },
         ],
       }),
-    );
+          2,
+);
     expect(parts).toEqual([120, 80]);
   });
 
@@ -52,7 +60,8 @@ describe("splitPartsOfTotal", () => {
           { postId: "events", value: 50, absorbsRemainder: true },
         ],
       }),
-    );
+          2,
+);
     expect(parts).toEqual([120, 80]);
   });
 
@@ -66,8 +75,9 @@ describe("splitPartsOfTotal", () => {
           { postId: "c", value: 33.34, absorbsRemainder: true },
         ],
       }),
-    );
-    expect(roundMoney(parts.reduce((a, b) => a + b, 0))).toBe(100);
+          2,
+);
+    expect(roundMoney(parts.reduce((a, b) => a + b, 0), 2)).toBe(100);
   });
 });
 
@@ -121,14 +131,14 @@ describe("sliceAmountForMonth", () => {
 
 describe("chargesForPurchaseInMonth", () => {
   test("a simple purchase charges one post", () => {
-    expect(chargesForPurchaseInMonth(purchase(), "2026-09", "DKK", rates)).toEqual([
+    expect(chargesForPurchaseInMonth(purchase(), "2026-09", "DKK", rates, TEST_CURRENCIES)).toEqual([
       { postId: "food", amount: 200 },
     ]);
   });
 
   test("converts a foreign-currency purchase into base", () => {
     const eur = purchase({ total: { amount: 10, currency: "EUR" } });
-    expect(chargesForPurchaseInMonth(eur, "2026-09", "DKK", rates)).toEqual([
+    expect(chargesForPurchaseInMonth(eur, "2026-09", "DKK", rates, TEST_CURRENCIES)).toEqual([
       { postId: "food", amount: 74.6 },
     ]);
   });
@@ -147,11 +157,11 @@ describe("chargesForPurchaseInMonth", () => {
         ],
       },
     });
-    expect(chargesForPurchaseInMonth(financedSplit, "2026-10", "DKK", rates)).toEqual([
+    expect(chargesForPurchaseInMonth(financedSplit, "2026-10", "DKK", rates, TEST_CURRENCIES)).toEqual([
       { postId: "games", amount: 700 },
       { postId: "events", amount: 300 },
     ]);
-    expect(chargesForPurchaseInMonth(financedSplit, "2026-11", "DKK", rates)).toEqual([
+    expect(chargesForPurchaseInMonth(financedSplit, "2026-11", "DKK", rates, TEST_CURRENCIES)).toEqual([
       { postId: "games", amount: 1400 },
       { postId: "events", amount: 600 },
     ]);
@@ -169,14 +179,14 @@ describe("chargesForPurchaseInMonth", () => {
         slices: [{ month: "2026-10", amount: { amount: 600, currency: "DKK" } }],
       },
     });
-    expect(chargesForPurchaseInMonth(financed, "2026-10", "DKK", rates)).toEqual([
+    expect(chargesForPurchaseInMonth(financed, "2026-10", "DKK", rates, TEST_CURRENCIES)).toEqual([
       { postId: "games", amount: 400 },
       { postId: "events", amount: 200 },
     ]);
   });
 
   test("charges in a month the purchase does not touch are empty", () => {
-    expect(chargesForPurchaseInMonth(purchase(), "2026-01", "DKK", rates)).toEqual([]);
+    expect(chargesForPurchaseInMonth(purchase(), "2026-01", "DKK", rates, TEST_CURRENCIES)).toEqual([]);
   });
 
   test("slice charges always sum to the slice total", () => {
@@ -188,8 +198,8 @@ describe("chargesForPurchaseInMonth", () => {
         { postId: "c", value: 1, absorbsRemainder: true },
       ],
     });
-    const charges = chargesForPurchaseInMonth(odd, "2026-09", "DKK", rates);
-    expect(roundMoney(charges.reduce((sum, c) => sum + c.amount, 0))).toBe(100);
+    const charges = chargesForPurchaseInMonth(odd, "2026-09", "DKK", rates, TEST_CURRENCIES);
+    expect(roundMoney(charges.reduce((sum, c) => sum + c.amount, 0), 2)).toBe(100);
   });
 });
 
@@ -197,6 +207,7 @@ describe("chargesForMonth", () => {
   test("sums charges per post across all purchases", () => {
     const data: Dataset = {
       settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 1 },
+      currencies: TEST_CURRENCIES,
       fxRates: rates,
       posts: [],
       months: [],
@@ -214,6 +225,7 @@ describe("chargesForMonth", () => {
   test("a month with no purchases yields an empty map", () => {
     const data: Dataset = {
       settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 1 },
+      currencies: TEST_CURRENCIES,
       fxRates: rates,
       posts: [],
       months: [],

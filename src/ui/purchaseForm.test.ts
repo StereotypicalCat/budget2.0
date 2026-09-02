@@ -30,7 +30,7 @@ describe("emptyDraft", () => {
 
 describe("splitBalance", () => {
   test("is zero when percentages total 100", () => {
-    expect(splitBalance(draft())).toBe(0);
+    expect(splitBalance(draft(), 2)).toBe(0);
   });
 
   test("reports the missing percentage", () => {
@@ -40,7 +40,7 @@ describe("splitBalance", () => {
         { postId: "events", value: 30, absorbsRemainder: false },
       ],
     });
-    expect(splitBalance(d)).toBe(10);
+    expect(splitBalance(d, 2)).toBe(10);
   });
 
   test("reports the missing amount in fixed mode", () => {
@@ -51,7 +51,7 @@ describe("splitBalance", () => {
         { postId: "events", value: 50, absorbsRemainder: false },
       ],
     });
-    expect(splitBalance(d)).toBe(30);
+    expect(splitBalance(d, 2)).toBe(30);
   });
 });
 
@@ -123,7 +123,7 @@ describe("toPurchase and fromPurchase", () => {
 
 describe("finance plans", () => {
   test("withPlan generates equal slices from the given month", () => {
-    const d = withPlan(draft({ amount: 3000 }), "2026-10", 6);
+    const d = withPlan(draft({ amount: 3000 }), "2026-10", 6, 2);
     expect(d.plan!.slices).toHaveLength(6);
     expect(d.plan!.slices[0]).toEqual({
       month: "2026-10",
@@ -140,37 +140,37 @@ describe("finance plans", () => {
         { postId: "events", value: 30, absorbsRemainder: false },
       ],
     });
-    expect(withPlan(split, "2026-10", 2).splits).toEqual(split.splits);
+    expect(withPlan(split, "2026-10", 2, 2).splits).toEqual(split.splits);
   });
 
   test("withoutPlan clears the schedule", () => {
-    expect(withoutPlan(withPlan(draft(), "2026-10", 3)).plan).toBeNull();
+    expect(withoutPlan(withPlan(draft(), "2026-10", 3, 2)).plan).toBeNull();
   });
 
   test("setSliceAmount edits one slice and leaves the others alone", () => {
-    const d = setSliceAmount(withPlan(draft({ amount: 3000 }), "2026-10", 3), 0, 1500);
+    const d = setSliceAmount(withPlan(draft({ amount: 3000 }), "2026-10", 3, 2), 0, 1500);
     expect(d.plan!.slices.map((s) => s.amount.amount)).toEqual([1500, 1000, 1000]);
   });
 
   test("planBalance reports the difference between the slices and the total", () => {
-    const even = withPlan(draft({ amount: 3000 }), "2026-10", 3);
-    expect(planBalance(even)).toBe(0);
-    expect(planBalance(setSliceAmount(even, 0, 1500))).toBe(-500);
+    const even = withPlan(draft({ amount: 3000 }), "2026-10", 3, 2);
+    expect(planBalance(even, 2)).toBe(0);
+    expect(planBalance(setSliceAmount(even, 0, 1500), 2)).toBe(-500);
   });
 
   test("planBalance is zero when there is no plan", () => {
-    expect(planBalance(draft())).toBe(0);
+    expect(planBalance(draft(), 2)).toBe(0);
   });
 
   test("a plan with unbalanced slices is still valid", () => {
     // A deposit-then-instalments plan may legitimately not sum to the total
     // yet while the user is typing; the editor warns rather than blocking.
-    const d = setSliceAmount(withPlan(draft({ amount: 3000 }), "2026-10", 3), 0, 1500);
+    const d = setSliceAmount(withPlan(draft({ amount: 3000 }), "2026-10", 3, 2), 0, 1500);
     expect(validatePurchase(d)).toEqual([]);
   });
 
   test("a plan with zero months is rejected", () => {
-    expect(() => withPlan(draft(), "2026-10", 0)).toThrow(/at least one month/i);
+    expect(() => withPlan(draft(), "2026-10", 0, 2)).toThrow(/at least one month/i);
   });
 
   test("split×plan composition: each slice divides across posts in the split ratio", () => {
@@ -189,6 +189,7 @@ describe("finance plans", () => {
       }),
       "2026-10",
       3,
+      2,
     );
     expect(composed.splits).toEqual([
       { postId: "games", value: 70, absorbsRemainder: true },

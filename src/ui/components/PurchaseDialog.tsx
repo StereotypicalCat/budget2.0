@@ -27,9 +27,10 @@ import {
   type BulkDraft,
 } from "../bulkEntry.ts";
 import { useDataset } from "../hooks/useDataset.ts";
+import { parseMoneyInput } from "../moneyInput.ts";
 import { useMutate } from "../hooks/useMutate.ts";
 import { addPurchase, cancelScheduleFrom, updatePurchase } from "../../store/actions.ts";
-import { CURRENCIES, type MonthId, type Purchase } from "../../domain/types.ts";
+import type { MonthId, Purchase } from "../../domain/types.ts";
 
 interface Props {
   monthId: MonthId;
@@ -48,6 +49,11 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<PurchaseDraft>(() =>
     purchase ? fromPurchase(purchase) : emptyDraft(monthId, activePosts[0]?.id ?? ""),
+  );
+  // The amount field keeps its own text so a half-typed "30." or "30 " stays
+  // exactly as typed; `draft.amount` only moves when the text parses.
+  const [amountText, setAmountText] = useState(() =>
+    purchase ? String(purchase.total.amount) : "",
   );
   // "many" is only meaningful when adding — editing an existing purchase edits
   // exactly one, so the toggle is hidden in that case.
@@ -179,7 +185,7 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
                       setBulk((b) => ({ ...b, currency }));
                     }}
                   >
-                    {CURRENCIES.map((currency) => (
+                    {dataset.currencies.map(({ code: currency }) => (
                       <option key={currency} value={currency}>
                         {currency}
                       </option>
@@ -247,15 +253,24 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
             </div>
             <div className="space-y-1">
               <Label htmlFor="purchase-amount">Total</Label>
+              {/* type="text", not "number": a number input silently discards
+                  anything non-numeric, so "30$" would never reach the parser.
+                  Entry speed is the point — the currency is set from what was
+                  typed rather than from a second control. */}
               <Input
                 id="purchase-amount"
-                type="number"
-                step="0.01"
+                inputMode="decimal"
                 className="font-money"
-                value={draft.amount}
-                onChange={(event) =>
-                  setDraft({ ...draft, amount: Number(event.target.value) || 0 })
-                }
+                placeholder="30$"
+                value={amountText}
+                onChange={(event) => {
+                  const typed = event.target.value;
+                  setAmountText(typed);
+                  const parsed = parseMoneyInput(typed, dataset.currencies, draft.currency);
+                  if (parsed) {
+                    setDraft({ ...draft, amount: parsed.amount, currency: parsed.currency });
+                  }
+                }}
               />
             </div>
             <div className="space-y-1">
@@ -268,7 +283,7 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
                   setDraft({ ...draft, currency: event.target.value as typeof draft.currency })
                 }
               >
-                {CURRENCIES.map((currency) => (
+                {dataset.currencies.map(({ code: currency }) => (
                   <option key={currency} value={currency}>
                     {currency}
                   </option>

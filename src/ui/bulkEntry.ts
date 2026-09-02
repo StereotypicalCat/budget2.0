@@ -69,10 +69,10 @@ export function filledLines(draft: BulkDraft): BulkLine[] {
   return draft.lines.filter((line) => !isBlankLine(line));
 }
 
-export function bulkTotal(draft: BulkDraft): number {
+export function bulkTotal(draft: BulkDraft, digits: number): number {
   return roundMoney(
     filledLines(draft).reduce((sum, line) => sum + line.amount, 0),
-    draft.currency,
+    digits,
   );
 }
 

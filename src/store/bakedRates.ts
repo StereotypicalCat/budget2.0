@@ -1,4 +1,4 @@
-import { CURRENCIES, type Currency, type FxRate } from "../domain/types.ts";
+import { SEED_CURRENCIES, type Currency, type FxRate } from "../domain/types.ts";
 
 /**
  * Exchange rates baked in at build time so a fresh install can convert a EUR
@@ -39,14 +39,19 @@ export const FALLBACK_FX_RATES: readonly FxRate[] = Object.freeze([
   }),
 ]);
 
-/** The currencies a baked payload must cover: everything but the base. */
-const REQUIRED = CURRENCIES.filter((c) => c !== "DKK");
+/**
+ * The currencies a baked payload must cover: the seed table minus the base.
+ * Only the SEED currencies — a dataset that already exists is never seeded, so
+ * currencies the owner added later are irrelevant here.
+ */
+const REQUIRED: Currency[] = SEED_CURRENCIES.map((c) => c.code).filter((c) => c !== "DKK");
+const SEED_CODES: Currency[] = SEED_CURRENCIES.map((c) => c.code);
 
 function isUsableRate(value: unknown): value is FxRate {
   if (typeof value !== "object" || value === null) return false;
   const rate = value as Record<string, unknown>;
   return (
-    CURRENCIES.includes(rate.currency as Currency) &&
+    SEED_CODES.includes(rate.currency as Currency) &&
     typeof rate.baseUnitsPerOne === "number" &&
     Number.isFinite(rate.baseUnitsPerOne) &&
     rate.baseUnitsPerOne > 0 &&

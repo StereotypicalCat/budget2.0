@@ -1,6 +1,6 @@
 import { test, expect, describe } from "bun:test";
+import { SCHEMA_VERSION, createSeedDataset } from "../domain/seed.ts";
 import { migrate, UnsupportedSchemaError } from "./migrations.ts";
-import { createSeedDataset, SCHEMA_VERSION } from "../domain/seed.ts";
 
 describe("migrate", () => {
   test("passes a current-version dataset through unchanged", () => {
@@ -63,7 +63,10 @@ function v1Dataset() {
 describe("v1 -> v2: rules become a dated series", () => {
   test("each standingRule becomes one version starting at the fold start", () => {
     const migrated = migrate(v1Dataset());
-    expect(migrated.settings.schemaVersion).toBe(2);
+    // migrate() runs every step to the current SCHEMA_VERSION, so this lands
+    // at 3 now that currencies became data. The rule conversion below is what
+    // this test is actually about.
+    expect(migrated.settings.schemaVersion).toBe(SCHEMA_VERSION);
     expect(migrated.posts[0]!.rules).toEqual([
       { from: "2026-01", rule: { kind: "percentOfIncome", percent: 20 } },
     ]);
@@ -133,5 +136,100 @@ describe("v1 -> v2: rules become a dated series", () => {
     expect(migrated.posts[0]!.rules).toEqual([
       { from: "2026-01", rule: { kind: "percentOfIncome", percent: 20 } },
     ]);
+  });
+});
+
+describe("v2 -> v3: currencies become data", () => {
+  /** A realistic v2 dataset: no `currencies` field existed. */
+  function v2(): any {
+    return {
+      settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 2 },
+      fxRates: [
+        { currency: "EUR", baseUnitsPerOne: 7.4, updatedAt: "2026-01-01", source: "manual" },
+      ],
+      posts: [
+        {
+          id: "p1",
+          name: "Food",
+          order: 0,
+          archived: false,
+          currency: "DKK",
+          rules: [{ from: "2026-01", rule: { kind: "percentOfIncome", percent: 12 } }],
+        },
+      ],
+      months: [
+        { id: "2026-01", income: { amount: 20000, currency: "DKK" }, ruleOverrides: {} },
+      ],
+      purchases: [],
+    };
+  }
+
+  test("the three shipped currencies are added, with their decimals", () => {
+    const migrated = migrate(v2());
+    expect(migrated.settings.schemaVersion).toBe(3);
+    expect(migrated.currencies).toEqual([
+      { code: "DKK", digits: 2, symbol: "kr", name: "Danish krone" },
+      { code: "USD", digits: 2, symbol: "$", name: "US dollar" },
+      { code: "EUR", digits: 2, symbol: "€", name: "Euro" },
+    ]);
+  });
+
+  /**
+   * The whole point of the migration being safe: every currency that existed
+   * had two decimal places, and the seeded table says two, so not one stored
+   * amount can round differently than it did before.
+   */
+  test("no amount can round differently than it did under v2", () => {
+    const migrated = migrate(v2());
+    for (const currency of migrated.currencies) {
+      expect(currency.digits).toBe(2);
+    }
+  });
+
+  test("nothing else about the dataset is touched", () => {
+    const before = v2();
+    const migrated = migrate(structuredClone(before));
+    expect(migrated.posts).toEqual(before.posts);
+    expect(migrated.months).toEqual(before.months);
+    expect(migrated.fxRates).toEqual(before.fxRates);
+    expect(migrated.settings.baseCurrency).toBe("DKK");
+    expect(migrated.settings.foldStartMonth).toBe("2026-01");
+  });
+
+  test("a v1 dataset migrates all the way through to v3", () => {
+    const v1 = {
+      settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 1 },
+      fxRates: [],
+      posts: [
+        {
+          id: "p1",
+          name: "Food",
+          order: 0,
+          archived: false,
+          currency: "DKK",
+          standingRule: { kind: "fixed", amount: { amount: 500, currency: "DKK" } },
+        },
+      ],
+      months: [],
+      purchases: [],
+    };
+    const migrated = migrate(v1);
+    expect(migrated.settings.schemaVersion).toBe(3);
+    expect(migrated.posts[0]!.rules).toEqual([
+      { from: "2026-01", rule: { kind: "fixed", amount: { amount: 500, currency: "DKK" } } },
+    ]);
+    expect(migrated.currencies.map((c) => c.code)).toEqual(["DKK", "USD", "EUR"]);
+  });
+
+  /**
+   * A dataset can only reach v3 through this step, but an owner could have a
+   * hand-edited file that already has the field. Overwriting it would silently
+   * discard currencies they added.
+   */
+  test("an existing currencies field is kept, not overwritten", () => {
+    const data = v2();
+    data.currencies = [{ code: "DKK", digits: 2 }, { code: "JPY", digits: 0 }];
+    const migrated = migrate(data);
+    expect(migrated.currencies.map((c) => c.code)).toEqual(["DKK", "JPY"]);
   });
 });

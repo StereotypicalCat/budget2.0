@@ -1,4 +1,6 @@
 import { Button } from "@/components/ui/button";
+import { useDataset } from "../hooks/useDataset.ts";
+import { digitsFor } from "../../domain/currencies.ts";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatAmount } from "../format.ts";
@@ -28,7 +30,10 @@ function hasValidDate(draft: PurchaseDraft): boolean {
 }
 
 export function PlanEditor({ draft, onChange }: Props) {
-  const balance = planBalance(draft);
+  // The purchase's own currency decides the rounding, not the base currency:
+  // a plan for a JPY purchase must divide into whole yen.
+  const digits = digitsFor(useDataset().currencies, draft.currency);
+  const balance = planBalance(draft, digits);
 
   if (!draft.plan) {
     const dateReady = hasValidDate(draft);
@@ -41,7 +46,7 @@ export function PlanEditor({ draft, onChange }: Props) {
           disabled={!dateReady}
           onClick={() => {
             if (!dateReady) return;
-            onChange(withPlan(draft, monthOf(draft.date), 3));
+            onChange(withPlan(draft, monthOf(draft.date), 3, digits));
           }}
         >
           Spread this over several months
@@ -70,7 +75,7 @@ export function PlanEditor({ draft, onChange }: Props) {
             onChange={(event) => {
               const months = Number(event.target.value);
               if (Number.isInteger(months) && months >= 1) {
-                onChange(withPlan(draft, draft.plan!.startMonth, months));
+                onChange(withPlan(draft, draft.plan!.startMonth, months, digits));
               }
             }}
           />

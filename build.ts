@@ -47,7 +47,7 @@ async function bakeFxRates(): Promise<readonly FxRate[]> {
     });
     if (!response.ok) throw new Error(`rate service returned ${response.status}`);
 
-    const rates = parseFxResponse(await response.json(), FX_BASE, buildDate);
+    const rates = parseFxResponse(await response.json(), FX_BASE, FX_TARGETS, buildDate);
     // A partial response would leave one currency unconvertible on a fresh
     // install, which is the whole problem this solves. Prefer the complete
     // constants over an incomplete live answer.

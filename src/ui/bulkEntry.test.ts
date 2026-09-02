@@ -45,15 +45,15 @@ describe("blank lines", () => {
 
 describe("bulkTotal", () => {
   test("sums the filled lines", () => {
-    expect(bulkTotal(draft({ lines: [line("Milk", 25), line("Bread", 30.5), line("", 0)] }))).toBe(55.5);
+    expect(bulkTotal(draft({ lines: [line("Milk", 25), line("Bread", 30.5), line("", 0)] }), 2)).toBe(55.5);
   });
 
   test("is zero when there is nothing filled in", () => {
-    expect(bulkTotal(draft())).toBe(0);
+    expect(bulkTotal(draft(), 2)).toBe(0);
   });
 
   test("rounds the sum, so float tails never surface", () => {
-    expect(bulkTotal(draft({ lines: [line("a", 0.1), line("b", 0.2)] }))).toBe(0.3);
+    expect(bulkTotal(draft({ lines: [line("a", 0.1), line("b", 0.2)] }), 2)).toBe(0.3);
   });
 });
 
