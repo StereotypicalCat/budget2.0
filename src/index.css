@@ -145,10 +145,19 @@
 @layer base {
   :root {
     color-scheme: light;
+    /* The parts the browser draws for itself. `accent-color` is what tints a
+       native radio or checkbox — left unset it is the platform blue, which is
+       the one colour on screen belonging to no theme here. */
+    accent-color: var(--budget-accent);
   }
 
   .dark {
     color-scheme: dark;
+  }
+
+  ::selection {
+    background: var(--budget-accent);
+    color: var(--budget-accent-ink);
   }
 
   body {
