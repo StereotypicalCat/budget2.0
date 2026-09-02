@@ -3,9 +3,9 @@
 Work queued for whoever picks this up next, human or agent. Ordered. Each item
 says enough to act on without re-deriving the reasoning.
 
-**Current state:** merged to `main`. 419 tests passing, `bunx tsc --noEmit`
+**Current state:** merged to `main`. 443 tests passing, `bunx tsc --noEmit`
 clean, `bun run build` succeeds on both the live-fetch and offline paths.
-Sections 2 and 4 are DONE. Section 3 (redesign) is 1 of 4 sub-projects in.
+Sections 2, 4 and 7 are DONE. Section 3 (redesign) is 2 of 4 sub-projects in.
 Section 6 (currencies) is DONE. Every screen has now actually been looked at —
 see section 5.
 
@@ -61,7 +61,7 @@ The reasoning below is kept because it is the reasoning, not a plan.
   **argument**; the env read lives in a new `src/store/bakedRates.ts`, in the
   store layer, using the `try/catch` accessor pattern (see CLAUDE.md gotchas).
 
-## 3. Visual redesign — sub-project 1 of 4 DONE
+## 3. Visual redesign — sub-projects 1 and 2 of 4 DONE
 
 The owner's words: *"right now it looks a bit boring, simple and ugly. We want
 sleek, modern, and nice to use."* Then, on scoping: both themes with a toggle,
@@ -79,9 +79,33 @@ foundation last is how that happened; do not repeat it.
 | # | Sub-project | State |
 |---|---|---|
 | 1 | Design foundation — two-theme tokens, theme toggle, self-hosted Inter + JetBrains Mono, one Section/Stat card, table furniture | DONE (`bb3c661`) |
-| 2 | Month view | date-grouped purchases DONE (`a159189`); income/totals block and the carry meter's presentation still open |
+| 2 | Month view | DONE. Date-grouped purchases (`a159189`), then the header, the post rows and the carry meter |
 | 3 | Year, Summary, Post detail | on the new foundation but not rethought. The 12-month matrix only fits by scrolling — decide whether compact number formatting replaces that |
 | 4 | Dialogs and fast entry | untouched. Native `<select>` elements are still browser-default, and `up`/`down`/`archive` are bare text buttons |
+
+**Sub-project 2, for whoever does 3 and 4.** Spec:
+`docs/superpowers/specs/2026-09-02-month-view-design.md`. Three things it
+settled that the reporting screens should follow rather than re-decide:
+
+- **Meter geometry is `src/ui/meterSegments.ts`**, pure and tested, with
+  `<Meter>` as the only thing that paints it. A third meter belongs there too,
+  not inline in a component. Negatives clamp rather than invert, because a
+  segment of negative width puts the gradient's stops out of order and paints
+  something arbitrary instead of failing.
+- **Two markups, not one reflowing grid.** The post table is a real `<table>`
+  from `sm:` up and a list of two-line blocks below it. At 390px the layout
+  genuinely stops being a table, and `role="table"` on it would describe rows
+  and columns that no longer exist on screen. The year matrix faces the same
+  question and has more columns to lose.
+- **State the currency once per table, not per cell.** Every figure in the post
+  table is base currency, so `formatSignedAmount` prints bare numbers and the
+  legend names DKK once. This is what stopped "+4,219.61 DKK" wrapping on a
+  phone. `formatMoney` is still right wherever an amount can be in some other
+  currency — every purchase row, for one.
+
+Also worth knowing: `src/ui/cssTokens.test.ts` matches source *text*, so it
+flags a token named in a code comment as readily as one in a `style` — which is
+exactly what it did to the comment explaining it.
 
 **Watch for:** the brand teal is `--primary`, never `--accent` — shadcn's
 `--accent` is a hover *background* whose paired foreground must move with it.
@@ -140,6 +164,24 @@ Left undone, deliberately:
   Fine for one "$" currency; if the owner adds two, typing the code
   disambiguates and nothing warns them. Tested, documented, not solved.
 
+## 7. ~~Reset to a fresh install~~ — DONE
+
+Settings > Your data > "Reset everything…". The owner asked for a reset that
+includes the currencies and the seed categories, and chose fresh-install state
+over an empty dataset: the three starter posts, the DKK/USD/EUR table, the
+baked rates, this month at zero income, no purchases.
+
+- `store.reset()` calls the same `createSeedDataset(currentMonth, seedRates)`
+  that `load()` uses on a first run, through the same write queue. Seeding
+  lives in the store, not the UI, so "reset" and "a brand-new browser" cannot
+  drift apart.
+- The confirm panel reuses the import flow's shape and its **order of
+  operations**: the JSON backup downloads BEFORE the destructive write, and a
+  backup that fails aborts the reset. This is the user's only copy.
+- Verified in Chrome by clicking through and reading IndexedDB back: 3 seed
+  posts, DKK/USD/EUR, both baked manual rates, 0 purchases, one month at zero
+  income.
+
 ## 5. Still needs a human
 
 `scripts/screenshot.ts` drives headless Chrome, so the list here is much
@@ -162,6 +204,11 @@ Genuinely outstanding:
   prompt appearing.
 - the generated **`.ods` opening in a real spreadsheet** (validated
   structurally: mimetype first and stored, well-formed XML, numeric cells).
+- **the pre-destructive backup actually landing as a file.** Both the import
+  and the reset flow download a JSON backup before replacing the dataset, and
+  the code path demonstrably runs (the reset proceeds only when it returns
+  success). Whether headless Chrome wrote the file is not observable here, so
+  nobody has yet confirmed the backup is openable — only that it was issued.
 - **keyboard flow in fast entry** — Tab traversal, Backspace-to-remove, and
   focus placement after a row auto-appends. Drivable over CDP in principle;
   not yet done.

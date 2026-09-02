@@ -74,6 +74,13 @@ Three deliberate properties in that chain:
 - **Cloned.** `useSyncExternalStore` detects change by reference identity;
   mutating in place makes the UI silently stop re-rendering.
 
+The two whole-dataset writes take the same queue and the same rules:
+`store.replace()` behind JSON import, and `store.reset()` behind Settings'
+"Reset everything". `reset()` calls the same `createSeedDataset` that `load()`
+uses on a first run, so "reset" and "a brand-new browser" cannot drift apart.
+Both are preceded in the UI by a JSON backup download that must succeed before
+the destructive write is attempted.
+
 ## Money
 
 A float, deliberately, with two rules that make it safe:
