@@ -75,6 +75,29 @@ describe("monthView", () => {
     expect(monthView(greedy, "2026-01").unallocated).toBe(-2000);
   });
 
+  test("counts the posts that are overspent, so the month can say so at a glance", () => {
+    expect(monthView(data, "2026-01").overspentCount).toBe(0);
+
+    // food is allocated 2000 and spent 3000: one post behind.
+    const over: Dataset = {
+      ...data,
+      purchases: [spend("a", "food", 3000, "2026-01-10")],
+    };
+    expect(monthView(over, "2026-01").overspentCount).toBe(1);
+  });
+
+  test("a post at exactly zero remaining is not overspent", () => {
+    // Rent-shaped: allocated 2000, spent 2000. Nothing left is not the same
+    // as owing something, and the header must not claim otherwise.
+    const exact: Dataset = {
+      ...data,
+      purchases: [spend("a", "food", 2000, "2026-01-10")],
+    };
+    const view = monthView(exact, "2026-01");
+    expect(view.rows.find((r) => r.post.id === "food")!.figures.remaining).toBe(0);
+    expect(view.overspentCount).toBe(0);
+  });
+
   test("archived posts appear only when they have activity", () => {
     const withArchived: Dataset = {
       ...data,

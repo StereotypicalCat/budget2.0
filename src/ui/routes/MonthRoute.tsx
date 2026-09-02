@@ -5,16 +5,18 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useDataset } from "../hooks/useDataset.ts";
 import { useMutate } from "../hooks/useMutate.ts";
-import { monthView } from "../../domain/views.ts";
+import { monthView, type MonthViewModel } from "../../domain/views.ts";
 import { addMonths } from "../../domain/months.ts";
 import { setIncome, deletePurchase, setRuleFrom } from "../../store/actions.ts";
 import { ruleAt } from "../../domain/allocation.ts";
 import type { MonthId, Post, Purchase, Rule } from "../../domain/types.ts";
 import { sliceAmountForMonth } from "../../domain/charges.ts";
 import { formatMoney, formatSignedMoney } from "../format.ts";
-import { PostTable } from "../components/PostTable.tsx";
+import { PostTable, PostTableLegend } from "../components/PostTable.tsx";
 import { PurchaseDialog } from "../components/PurchaseDialog.tsx";
+import { Meter } from "../components/Meter.tsx";
 import { Section, Stat } from "../components/Section.tsx";
+import { allocatedPercentOfIncome, allocationMeterSegments } from "../meterSegments.ts";
 import { groupPurchasesByDate } from "../purchaseGroups.ts";
 
 export function MonthRoute() {
@@ -54,8 +56,14 @@ export function MonthRoute() {
         <MonthStep to={`/month/${addMonths(monthId, 1)}`} label={addMonths(monthId, 1)} />
       </header>
 
+      {/* Income is the origin of every figure below it, so the block reads
+          left to right as one statement: what came in, how much of it is
+          committed, what is left to commit — then, under a rule, what has
+          actually been spent and whether any post is behind. The four peer
+          figures this replaced stated the same numbers at the same weight and
+          answered neither question. */}
       <Section>
-        <div className="flex flex-wrap items-end gap-x-10 gap-y-5">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-10">
           <div className="space-y-1.5">
             <Label htmlFor="income" className="text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted">
               Income this month ({base})
@@ -74,31 +82,52 @@ export function MonthRoute() {
               }}
             />
           </div>
-          <dl className="flex flex-wrap gap-x-10 gap-y-4">
-            <Stat label="Allocated">{formatMoney(view.totalAllocation, base)}</Stat>
+          <div className="min-w-0 flex-1 space-y-2">
+            <dl className="flex flex-wrap gap-x-10 gap-y-4">
+              <Stat label="Allocated">{formatMoney(view.totalAllocation, base)}</Stat>
+              <Stat
+                label="Unallocated"
+                tone={view.unallocated < 0 ? "overspend" : "default"}
+                title={
+                  view.unallocated < 0
+                    ? "Allocations exceed this month's income. This is allowed."
+                    : undefined
+                }
+              >
+                {formatSignedMoney(view.unallocated, base)}
+              </Stat>
+            </dl>
+            <Meter
+              segments={allocationMeterSegments(view.income, view.totalAllocation)}
+              className="h-1.5 rounded-full"
+            />
+            <p className="text-xs text-budget-ink-muted">{allocationCaption(view)}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-x-10 gap-y-2 border-t border-budget-rule pt-3">
+          <dl>
             <Stat label="Spent">{formatMoney(view.totalCharges, base)}</Stat>
-            <Stat
-              label="Unallocated"
-              tone={view.unallocated < 0 ? "overspend" : "default"}
-              title={
-                view.unallocated < 0
-                  ? "Allocations exceed this month's income. This is allowed."
-                  : undefined
-              }
-            >
-              {formatSignedMoney(view.unallocated, base)}
-            </Stat>
           </dl>
+          {/* Rendered in both directions. "No posts overspent" is a real answer
+              to the app's second question, and a line that only appears when
+              something is wrong moves everything above it when it arrives. */}
+          <p
+            className={`text-sm ${
+              view.overspentCount > 0 ? "text-overspend" : "text-budget-ink-muted"
+            }`}
+          >
+            {overspentLabel(view.overspentCount)}
+          </p>
         </div>
       </Section>
 
-      <Section title="Posts" className="overflow-hidden">
-      <PostTable
-        monthId={monthId}
-        baseCurrency={base}
-        rows={view.rows}
-        onChangeRule={setChangingRuleFor}
-      />
+      <Section
+        title="Posts"
+        hint={<PostTableLegend baseCurrency={base} />}
+        className="overflow-hidden"
+      >
+        <PostTable monthId={monthId} rows={view.rows} onChangeRule={setChangingRuleFor} />
       </Section>
 
       {changingPost && (
@@ -199,6 +228,21 @@ function PurchaseRow({
       </span>
     </li>
   );
+}
+
+function allocationCaption(view: MonthViewModel): string {
+  const percent = allocatedPercentOfIncome(view.income, view.totalAllocation);
+  if (percent === null) {
+    return view.totalAllocation > 0
+      ? "Allocated against no recorded income."
+      : "No income recorded for this month yet.";
+  }
+  return `${percent}% of income allocated`;
+}
+
+function overspentLabel(count: number): string {
+  if (count === 0) return "No posts overspent";
+  return `${count} post${count === 1 ? "" : "s"} overspent`;
 }
 
 /** "2026-09" reads as a key; "September 2026" reads as a month. */

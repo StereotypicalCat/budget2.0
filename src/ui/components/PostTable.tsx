@@ -1,157 +1,265 @@
-import { Fragment } from "react";
 import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
-import { formatMoney, formatSignedMoney } from "../format.ts";
+import { formatAmount, formatSignedAmount } from "../format.ts";
 import { ruleAt } from "../../domain/allocation.ts";
+import { carryMeterSegments, type MeterSegment } from "../meterSegments.ts";
+import { Meter } from "./Meter.tsx";
 import type { MonthPostRow } from "../../domain/views.ts";
-import type { PostMonthFigures } from "../../domain/fold.ts";
 import type { Currency, MonthId } from "../../domain/types.ts";
 
 interface Props {
   monthId: MonthId;
-  baseCurrency: Currency;
   rows: MonthPostRow[];
   /** Omitted on read-only mounts; only the month view offers rule editing. */
   onChangeRule?: (postId: string) => void;
 }
 
 /**
- * Carry meter: the design contract's signature element. A 3px rule beneath
- * each post row, encoding the rollover fold's four numbers as a single
- * hard-stopped gradient so envelope rollover is visible without reading
- * digits.
+ * The month's posts, in two markups: a real table from `sm:` up, a list of
+ * two-line blocks below it.
  *
- * Segments, left to right, sized against a per-row scale of
- * (carried-in surplus + max(allocation, charges)):
- *   - --surplus       : carried-in surplus (omitted when carriedIn <= 0)
- *   - --budget-accent : spend within this month's allocation, filled from
- *                       the track's left edge
- *   - --budget-rule   : the unspent remainder of the allocation track
- *   - --overspend     : spend beyond the allocation, past the track's end
+ * NOT one reflowing grid with `role="table"`. At 390px the layout genuinely
+ * stops being a table — it is a stack of two-line blocks — and leaving table
+ * roles on it would describe rows and columns to a screen reader that no
+ * longer exist on screen. Each structure is honest about itself instead. The
+ * figures appear twice in the DOM at any one width, which at six to thirty
+ * posts costs nothing, and both markups read their cells from `postRowCells`
+ * so the numbers are still derived in exactly one place.
+ *
+ * The currency is deliberately absent from every cell: it is stated once, in
+ * the legend, because every figure here is in the dataset's base currency.
+ * Repeating it bought nothing and wrapped "+4,219.61 DKK" onto two lines on a
+ * phone, which is the width a grocery trip is actually entered at.
  */
-function carryMeterBackground(figures: PostMonthFigures): string {
-  const surplus = Math.max(figures.carriedIn, 0);
-  const scale = surplus + Math.max(figures.allocation, figures.charges);
+interface RowCells {
+  carriedIn: string;
+  carriedInTone: string;
+  allocation: string;
+  charges: string;
+  remaining: string;
+  remainingTone: string;
+  segments: MeterSegment[];
+}
 
-  if (scale <= 0) {
-    return "var(--budget-rule)";
-  }
+function postRowCells({ figures }: MonthPostRow): RowCells {
+  return {
+    carriedIn: formatSignedAmount(figures.carriedIn),
+    carriedInTone:
+      figures.carriedIn > 0
+        ? "text-surplus"
+        : figures.carriedIn < 0
+          ? "text-overspend"
+          : "",
+    allocation: formatAmount(figures.allocation),
+    charges: formatAmount(figures.charges),
+    remaining: formatSignedAmount(figures.remaining),
+    remainingTone: figures.remaining < 0 ? "text-overspend" : "",
+    segments: carryMeterSegments(figures),
+  };
+}
 
-  const pSurplus = (surplus / scale) * 100;
-  const pFillEnd = pSurplus + (Math.min(figures.charges, figures.allocation) / scale) * 100;
-  const pTrackEnd = pSurplus + (figures.allocation / scale) * 100;
-
+/**
+ * The four colours of the carry meter, named once for the whole table. Sits in
+ * the Section's hint, so it renders inside a `<p>` — spans only, no divs.
+ */
+export function PostTableLegend({ baseCurrency }: { baseCurrency: Currency }) {
   return (
-    `linear-gradient(to right, ` +
-    `var(--surplus) 0%, var(--surplus) ${pSurplus}%, ` +
-    `var(--budget-accent) ${pSurplus}%, var(--budget-accent) ${pFillEnd}%, ` +
-    `var(--budget-rule) ${pFillEnd}%, var(--budget-rule) ${pTrackEnd}%, ` +
-    `var(--overspend) ${pTrackEnd}%, var(--overspend) 100%)`
+    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <span>All figures in {baseCurrency}.</span>
+      <Swatch token="--surplus" label="carried in" />
+      <Swatch token="--budget-accent" label="spent" />
+      <Swatch token="--budget-rule" label="unspent" />
+      <Swatch token="--overspend" label="over" />
+    </span>
   );
 }
 
-function CarryMeter({ figures }: { figures: PostMonthFigures }) {
+function Swatch({ token, label }: { token: string; label: string }) {
   return (
-    <div
-      aria-hidden="true"
-      className="h-[3px] w-full"
-      style={{ background: carryMeterBackground(figures) }}
-    />
+    <span className="flex items-center gap-1.5">
+      <span
+        aria-hidden="true"
+        className="h-2 w-2 shrink-0 rounded-sm"
+        style={{ background: `var(${token})` }}
+      />
+      {label}
+    </span>
   );
 }
 
-export function PostTable({ monthId, baseCurrency, rows, onChangeRule }: Props) {
+function PostName({
+  row: { post, overridden },
+  monthId,
+}: {
+  row: MonthPostRow;
+  monthId: MonthId;
+}) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="text-left">
-          <tr className="border-b border-budget-rule text-[0.6875rem] uppercase tracking-wider text-budget-ink-muted">
-            <th className="py-2 font-medium">Post</th>
-            <th className="py-2 pl-6 text-right font-medium">Carried in</th>
-            <th className="py-2 pl-6 text-right font-medium">Allocated</th>
-            <th className="py-2 pl-6 text-right font-medium">Spent</th>
-            <th className="py-2 pl-6 text-right font-medium">Remaining</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(({ post, figures, overridden }) => (
-            <Fragment key={post.id}>
-              <tr className="group transition-colors hover:bg-accent/60">
-                <td className="py-2.5">
-                  <Link to={`/post/${post.id}/month/${monthId}`} className="hover:underline">
-                    {post.name}
-                  </Link>
-                  {post.archived && (
-                    <Badge variant="outline" className="ml-2">
-                      archived
-                    </Badge>
-                  )}
-                  {overridden && (
-                    <Badge
-                      variant="secondary"
-                      className="ml-2"
-                      title="This month overrides the rule otherwise in effect"
-                    >
-                      overridden
-                    </Badge>
-                  )}
-                  {/* A month can carry BOTH badges: a version starting in a
-                      month the user also overrode is unusual but legal, and
-                      hiding either would obscure why the number is what it
-                      is. The override still wins the allocation. */}
-                  {ruleAt(post, monthId)?.from === monthId && (
-                    <Badge
-                      variant="outline"
-                      className="ml-2"
-                      title="This post's allocation rule changes from this month"
-                    >
-                      rule changes here
-                    </Badge>
-                  )}
-                  {onChangeRule && (
-                    <button
-                      type="button"
-                      className="ml-2 rounded text-xs text-budget-ink-muted underline decoration-dotted underline-offset-2 opacity-0 transition-opacity hover:text-budget-accent focus-visible:opacity-100 group-hover:opacity-100"
-                      onClick={() => onChangeRule(post.id)}
-                    >
-                      change from here
-                    </button>
-                  )}
-                </td>
-                <td
-                  className={`font-money py-2.5 pl-6 text-right ${
-                    figures.carriedIn > 0
-                      ? "text-surplus"
-                      : figures.carriedIn < 0
-                        ? "text-overspend"
-                        : ""
-                  }`}
+    <>
+      <Link to={`/post/${post.id}/month/${monthId}`} className="hover:underline">
+        {post.name}
+      </Link>
+      {post.archived && (
+        <Badge variant="outline" className="ml-2">
+          archived
+        </Badge>
+      )}
+      {overridden && (
+        <Badge
+          variant="secondary"
+          className="ml-2"
+          title="This month overrides the rule otherwise in effect"
+        >
+          overridden
+        </Badge>
+      )}
+      {/* A month can carry BOTH badges: a version starting in a month the user
+          also overrode is unusual but legal, and hiding either would obscure
+          why the number is what it is. The override still wins. */}
+      {ruleAt(post, monthId)?.from === monthId && (
+        <Badge
+          variant="outline"
+          className="ml-2"
+          title="This post's allocation rule changes from this month"
+        >
+          rule changes here
+        </Badge>
+      )}
+    </>
+  );
+}
+
+/**
+ * Placed differently in each markup, which is why it is not part of PostName.
+ * In the table it is revealed on hover, beside the name. On a phone there is
+ * no hover, so it has to be permanently visible — and beside the name at that
+ * size it competes with the name itself, so it goes at the end of the quiet
+ * caption line instead.
+ */
+function ChangeRuleButton({
+  postId,
+  onChangeRule,
+  className = "",
+}: {
+  postId: string;
+  onChangeRule: (postId: string) => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={`rounded text-budget-ink-muted underline decoration-dotted underline-offset-2 transition-opacity hover:text-budget-accent ${className}`}
+      onClick={() => onChangeRule(postId)}
+    >
+      change from here
+    </button>
+  );
+}
+
+export function PostTable({ monthId, rows, onChangeRule }: Props) {
+  return (
+    <>
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="w-full text-sm">
+          <thead className="text-left">
+            <tr className="border-b border-budget-rule text-[0.6875rem] uppercase tracking-wider text-budget-ink-muted">
+              <th className="py-2 font-medium">Post</th>
+              <th className="py-2 pl-6 text-right font-medium">Carried in</th>
+              <th className="py-2 pl-6 text-right font-medium">Allocated</th>
+              <th className="py-2 pl-6 text-right font-medium">Spent</th>
+              <th className="py-2 pl-6 text-right font-medium">Remaining</th>
+            </tr>
+          </thead>
+          {/* One tbody per post, holding the figures AND their meter. Multiple
+              tbodies are valid, and this is the only way to hover the pair as
+              one block — two loose sibling <tr>s cannot express that they
+              belong together, which is exactly how the meter came to look like
+              a divider between two rows rather than part of one. */}
+          {rows.map((row) => {
+            const cells = postRowCells(row);
+            return (
+              <tbody key={row.post.id} className="group">
+                <tr className="transition-colors group-hover:bg-accent/60">
+                  <td className="pb-0 pt-3">
+                    <PostName row={row} monthId={monthId} />
+                    {onChangeRule && (
+                      <ChangeRuleButton
+                        postId={row.post.id}
+                        onChangeRule={onChangeRule}
+                        className="ml-2 text-xs opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                      />
+                    )}
+                  </td>
+                  <td
+                    className={`font-money pb-0 pl-6 pt-3 text-right ${cells.carriedInTone}`}
+                  >
+                    {cells.carriedIn}
+                  </td>
+                  <td className="font-money pb-0 pl-6 pt-3 text-right">
+                    {cells.allocation}
+                  </td>
+                  <td className="font-money pb-0 pl-6 pt-3 text-right">{cells.charges}</td>
+                  <td
+                    className={`font-money pb-0 pl-6 pt-3 text-right font-medium ${cells.remainingTone}`}
+                  >
+                    {cells.remaining}
+                  </td>
+                </tr>
+                {/* The meter IS the row divider: tight under its own figures,
+                    with the gap below it. */}
+                <tr className="transition-colors group-hover:bg-accent/60">
+                  <td colSpan={5} className="px-0 pb-4 pt-1.5">
+                    <Meter segments={cells.segments} className="h-1" />
+                  </td>
+                </tr>
+              </tbody>
+            );
+          })}
+        </table>
+      </div>
+
+      <ul className="space-y-4 sm:hidden">
+        {rows.map((row) => {
+          const cells = postRowCells(row);
+          return (
+            <li key={row.post.id} className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="min-w-0">
+                  <PostName row={row} monthId={monthId} />
+                </span>
+                <span
+                  className={`font-money shrink-0 text-base font-medium ${cells.remainingTone}`}
                 >
-                  {formatSignedMoney(figures.carriedIn, baseCurrency)}
-                </td>
-                <td className="font-money py-2.5 pl-6 text-right">
-                  {formatMoney(figures.allocation, baseCurrency)}
-                </td>
-                <td className="font-money py-2.5 pl-6 text-right">
-                  {formatMoney(figures.charges, baseCurrency)}
-                </td>
-                <td
-                  className={`font-money py-2.5 pl-6 text-right font-medium ${
-                    figures.remaining < 0 ? "text-overspend" : ""
-                  }`}
-                >
-                  {formatSignedMoney(figures.remaining, baseCurrency)}
-                </td>
-              </tr>
-              <tr>
-                <td colSpan={5} className="p-0">
-                  <CarryMeter figures={figures} />
-                </td>
-              </tr>
-            </Fragment>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                  {cells.remaining}
+                </span>
+              </div>
+              <Meter segments={cells.segments} className="h-1" />
+              <p className="flex flex-wrap gap-x-3 text-[0.6875rem] text-budget-ink-muted">
+                <span>
+                  carried{" "}
+                  <span className={`font-money ${cells.carriedInTone}`}>{cells.carriedIn}</span>
+                </span>
+                <span>
+                  allocated <span className="font-money">{cells.allocation}</span>
+                </span>
+                <span>
+                  spent <span className="font-money">{cells.charges}</span>
+                </span>
+                {/* Pushed to the right end of the line it wraps onto, so six
+                    of these down a phone screen read as a quiet affordance
+                    rather than as each row's primary action. */}
+                {onChangeRule && (
+                  <ChangeRuleButton
+                    postId={row.post.id}
+                    onChangeRule={onChangeRule}
+                    className="ml-auto"
+                  />
+                )}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
