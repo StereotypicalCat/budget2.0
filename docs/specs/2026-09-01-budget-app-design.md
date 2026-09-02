@@ -310,7 +310,7 @@ migrations are mandatory rather than optional.
 
 ## Agent support files
 
-- `CLAUDE.md` — the `bun init` scaffold provides Bun idioms ("use `bun test`",
+- `AGENTS.md` — the `bun init` scaffold provides Bun idioms ("use `bun test`",
   "don't use vite", HTML imports). This project extends it with its own
   invariants: the domain layer stays free of React and IndexedDB, money
   rounds at every boundary, the last distributed part is computed by

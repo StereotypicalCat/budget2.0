@@ -52,7 +52,7 @@ below the unchanged month `<header>`.
 
 ### The allocation meter scales to `max(income, allocated)`
 
-Not to income. Over-budget is always allowed (CLAUDE.md), and allocating past
+Not to income. Over-budget is always allowed (AGENTS.md), and allocating past
 income is the ordinary way that shows up here, so the meter has to render it
 rather than cap at a full bar: the overflow past the income mark paints
 `--overspend`, and the label reads past 100%. Capping would make

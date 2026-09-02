@@ -33,7 +33,7 @@ export const SEED_CURRENCIES: readonly CurrencyDef[] = [
 /** Used when a currency has no definition. Two places is right almost always. */
 export const DEFAULT_CURRENCY_DIGITS = 2;
 
-/** A float amount paired with its currency. See CLAUDE.md for rounding rules. */
+/** A float amount paired with its currency. See AGENTS.md for rounding rules. */
 export interface Money {
   amount: number;
   currency: Currency;

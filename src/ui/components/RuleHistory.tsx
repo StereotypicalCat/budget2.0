@@ -14,7 +14,7 @@ interface Props {
  * Shape AND range, matching the import validator. `setRuleFrom` sorts the
  * series with `compareMonths`, which THROWS on a malformed MonthId; useMutate
  * would catch it and show an error, but a disabled button is the better
- * answer, and CLAUDE.md requires guarding a throwing domain call at the site
+ * answer, and AGENTS.md requires guarding a throwing domain call at the site
  * that invokes it from a handler.
  */
 const MONTH_ID = /^\d{4}-(0[1-9]|1[0-2])$/;

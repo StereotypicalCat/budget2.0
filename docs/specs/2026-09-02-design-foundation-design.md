@@ -48,7 +48,7 @@ colours app components may name.
 
 ### The brand teal is `--primary`, never `--accent`
 
-CLAUDE.md's hardest-won rule is "never define a bare `--accent`", paid for with
+AGENTS.md's hardest-won rule is "never define a bare `--accent`", paid for with
 an app-wide contrast bug. The mechanism matters: shadcn uses `--accent` as a
 hover **background** with `--accent-foreground` as the text on it. Setting one
 without the other repaints the background and leaves the text behind.

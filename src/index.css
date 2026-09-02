@@ -25,7 +25,7 @@
  *      than fighting it means every primitive (dialog, select, badge, button)
  *      inherits both themes for free.
  *
- * WHY THE PAIRS MATTER. CLAUDE.md's rule is "never define a bare `--accent`",
+ * WHY THE PAIRS MATTER. AGENTS.md's rule is "never define a bare `--accent`",
  * and it was paid for with an app-wide contrast bug: shadcn uses `--accent` as
  * a hover BACKGROUND and `--accent-foreground` as the text on it, so setting
  * one without the other repaints the background and leaves the text behind.

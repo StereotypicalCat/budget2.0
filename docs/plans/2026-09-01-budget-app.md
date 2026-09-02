@@ -72,7 +72,7 @@ Tests are co-located: `src/domain/money.test.ts` beside `src/domain/money.ts`.
 
 **Files:**
 - Create: `package.json`, `tsconfig.json`, `bunfig.toml`, `build.ts`, `src/index.ts`, `src/index.html`, `src/frontend.tsx`, `src/index.css` (all via `bun init`)
-- Modify: `CLAUDE.md` (append project invariants), `.gitignore`
+- Modify: `AGENTS.md` (append project invariants), `.gitignore`
 - Delete: `src/APITester.tsx`, `src/logo.svg`, `src/react.svg`
 - Test: `src/domain/smoke.test.ts`
 
@@ -158,9 +158,9 @@ Expected: PASS, 1 test.
 Run: `bun --hot src/index.ts`
 Expected: server starts, and the printed URL shows "Budget 2.0". Stop it with Ctrl-C.
 
-- [ ] **Step 7: Append project invariants to CLAUDE.md**
+- [ ] **Step 7: Append project invariants to AGENTS.md**
 
-The scaffolded `CLAUDE.md` documents Bun idioms. Append the rules specific to this project:
+The scaffolded `AGENTS.md` documents Bun idioms. Append the rules specific to this project:
 
 ```markdown
 ## Project invariants (Budget 2.0)
@@ -196,7 +196,7 @@ git add -A
 git commit -m "chore: scaffold Bun + React + shadcn project
 
 bun init --react=shadcn, with the demo API routes removed since this app
-has no backend. Adds project invariants to CLAUDE.md and a smoke test
+has no backend. Adds project invariants to AGENTS.md and a smoke test
 proving the domain layer imports with no DOM."
 ```
 
@@ -253,7 +253,7 @@ export const CURRENCY_DIGITS: Record<Currency, number> = {
   EUR: 2,
 };
 
-/** A float amount paired with its currency. See CLAUDE.md for rounding rules. */
+/** A float amount paired with its currency. See AGENTS.md for rounding rules. */
 export interface Money {
   amount: number;
   currency: Currency;

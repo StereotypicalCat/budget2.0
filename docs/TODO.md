@@ -59,7 +59,7 @@ The reasoning below is kept because it is the reasoning, not a plan.
   converting money at a number the user never chose.
 - Domain purity forces the shape: `createSeedDataset` takes the rates as an
   **argument**; the env read lives in a new `src/store/bakedRates.ts`, in the
-  store layer, using the `try/catch` accessor pattern (see CLAUDE.md gotchas).
+  store layer, using the `try/catch` accessor pattern (see AGENTS.md gotchas).
 
 ## 3. Visual redesign — sub-projects 1 and 2 of 4 DONE
 
