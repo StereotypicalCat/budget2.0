@@ -57,8 +57,23 @@ function roundRule(rule: Rule): Rule {
   return { kind: "percentOfIncome", percent: round2(rule.percent) };
 }
 
-function roundSplits(splits: Split[]): Split[] {
-  return splits.map((split) => ({ ...split, value: round2(split.value) }));
+/**
+ * A split's `value` is a percentage in "percent" mode and MONEY in the
+ * purchase's currency in "fixed" mode, so the two round differently: a
+ * percentage to 2 decimals, money to its currency's minor unit. Rounding
+ * both to a hardcoded 2 places is correct only while every supported
+ * currency happens to use hundredths.
+ */
+function roundSplits(
+  splits: Split[],
+  splitMode: Purchase["splitMode"],
+  currency: Currency,
+): Split[] {
+  return splits.map((split) => ({
+    ...split,
+    value:
+      splitMode === "fixed" ? roundMoney(split.value, currency) : round2(split.value),
+  }));
 }
 
 function roundSchedule(schedule: Schedule | null): Schedule | null {
@@ -182,7 +197,7 @@ export function addPurchase(
     ...purchase,
     id: newId(),
     total: roundMoneyValue(purchase.total),
-    splits: roundSplits(purchase.splits),
+    splits: roundSplits(purchase.splits, purchase.splitMode, purchase.total.currency),
     schedule: roundSchedule(purchase.schedule),
   };
   draft.purchases.push(created);
@@ -206,7 +221,14 @@ export function updatePurchase(
     resolved.total = roundMoneyValue(changes.total);
   }
   if (changes.splits) {
-    resolved.splits = roundSplits(changes.splits);
+    // Either field may be absent from a partial update; the stored purchase
+    // supplies whichever one is, so the mode and currency always agree with
+    // the values being rounded.
+    resolved.splits = roundSplits(
+      changes.splits,
+      changes.splitMode ?? purchase.splitMode,
+      (resolved.total ?? purchase.total).currency,
+    );
   }
   if (changes.schedule !== undefined) {
     resolved.schedule = roundSchedule(changes.schedule);

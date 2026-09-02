@@ -2,6 +2,7 @@ import tailwind from "bun-plugin-tailwind";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { normalizeBase } from "./src/ui/basePath.ts";
+import { buildManifest } from "./src/manifest.ts";
 
 const basePath = normalizeBase(process.env.BUN_PUBLIC_BASE_PATH);
 const outdir = path.join(process.cwd(), "dist");
@@ -73,23 +74,6 @@ const swResult = await Bun.build({
 if (!swResult.success) {
   for (const log of swResult.logs) console.error(log);
   throw new Error("Service worker build failed");
-}
-
-export function buildManifest(base: string): string {
-  return JSON.stringify(
-    {
-      name: "Budget 2.0",
-      short_name: "Budget",
-      start_url: base,
-      scope: base,
-      display: "standalone",
-      background_color: "#0f172a",
-      theme_color: "#0f172a",
-      icons: [{ src: `${base}icon.svg`, sizes: "any", type: "image/svg+xml" }],
-    },
-    null,
-    2,
-  );
 }
 
 await Bun.write(path.join(outdir, "manifest.webmanifest"), buildManifest(basePath));

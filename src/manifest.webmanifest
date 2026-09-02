@@ -1,10 +1,3 @@
 {
-  "name": "Budget 2.0",
-  "short_name": "Budget",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+  "$comment": "Not served, and deliberately valueless. This file exists only so Bun's dev-server HTML bundler can resolve the <link rel=\"manifest\"> href in src/index.html; Bun.serve has no `external` option, unlike Bun.build. The manifest actually served comes from src/manifest.ts: the dev server generates it per request, and build.ts writes dist/manifest.webmanifest from it. Adding real values here does nothing except let them go stale - src/manifest.test.ts fails if you do."
 }

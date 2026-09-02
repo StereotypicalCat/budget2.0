@@ -12,12 +12,17 @@ export interface PostMonthFigures {
   remaining: number;
 }
 
-export const EMPTY_FIGURES: PostMonthFigures = {
+/**
+ * Frozen because `figuresFor` hands this back by shared reference for every
+ * (post, month) the fold has no entry for. Unfrozen, one consumer mutating
+ * its result would move every other unknown row with it.
+ */
+export const EMPTY_FIGURES: PostMonthFigures = Object.freeze({
   carriedIn: 0,
   allocation: 0,
   charges: 0,
   remaining: 0,
-};
+});
 
 export type Fold = Map<MonthId, Map<PostId, PostMonthFigures>>;
 

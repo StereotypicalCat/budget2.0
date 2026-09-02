@@ -24,8 +24,14 @@ export function equalSlices(
   }));
 }
 
+/**
+ * Every slice of a schedule carries the purchase's currency, so the first one
+ * names the currency to round in. Rounding to a hardcoded 2 places would be
+ * wrong for any currency whose minor unit is not hundredths.
+ */
 export function sliceTotal(slices: ScheduleSlice[]): number {
-  return roundMoney(slices.reduce((sum, s) => sum + s.amount.amount, 0));
+  const sum = slices.reduce((total, s) => total + s.amount.amount, 0);
+  return roundMoney(sum, slices[0]?.amount.currency);
 }
 
 /** total - sum(slices). Positive means the plan is short of the total. */

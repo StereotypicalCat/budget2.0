@@ -147,3 +147,19 @@ test("figuresFor returns zeroes for a month outside the fold", () => {
     remaining: 0,
   });
 });
+
+describe("the empty-figures fallback", () => {
+  // figuresFor returns EMPTY_FIGURES by SHARED REFERENCE for any (post, month)
+  // the fold has no entry for. One consumer mutating that object would move
+  // every other unknown row with it — in a budgeting app, silently.
+  test("cannot be mutated through the value figuresFor hands back", () => {
+    const fold = foldBalances(dataset([post("food", 500)], []), "2026-01");
+    const missing = figuresFor(fold, "no-such-post", "2026-01");
+
+    expect(() => {
+      (missing as { allocation: number }).allocation = 999;
+    }).toThrow(TypeError);
+
+    expect(figuresFor(fold, "another-missing-post", "2026-01").allocation).toBe(0);
+  });
+});

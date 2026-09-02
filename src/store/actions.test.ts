@@ -2,6 +2,23 @@ import { test, expect, describe } from "bun:test";
 import * as actions from "./actions.ts";
 import { createSeedDataset } from "../domain/seed.ts";
 import type { Dataset } from "../domain/types.ts";
+import { CURRENCY_DIGITS } from "../domain/types.ts";
+
+/**
+ * Every currency this app supports today has 2 decimal places, so code that
+ * hardcodes 2 is indistinguishable from code that reads CURRENCY_DIGITS. This
+ * forces the table for one test, which is the only way to prove the table is
+ * consulted without making the product decision to add a non-2dp currency.
+ */
+function withDigits(currency: "DKK" | "USD" | "EUR", digits: number, body: () => void) {
+  const original = CURRENCY_DIGITS[currency];
+  CURRENCY_DIGITS[currency] = digits;
+  try {
+    body();
+  } finally {
+    CURRENCY_DIGITS[currency] = original;
+  }
+}
 
 function draft(): Dataset {
   return createSeedDataset("2026-09");
@@ -376,5 +393,61 @@ describe("rule versions", () => {
     expect(() => actions.removeRuleFrom(draft(), "ghost", "2026-04")).toThrow(
       /Unknown post: ghost/,
     );
+  });
+});
+
+describe("split values are rounded by what they MEAN", () => {
+  // In "fixed" mode a split value is money in the purchase's currency, so it
+  // must round to that currency's minor unit. In "percent" mode it is a
+  // percentage and has nothing to do with any currency.
+  test("a fixed-mode split rounds to the purchase currency's minor unit", () => {
+    withDigits("EUR", 0, () => {
+      const data = draft();
+      const purchase = actions.addPurchase(data, {
+        date: "2026-09-14",
+        description: "Sofa",
+        total: { amount: 100, currency: "EUR" },
+        splitMode: "fixed",
+        splits: [
+          { postId: data.posts[0]!.id, value: 10.44, absorbsRemainder: false },
+          { postId: data.posts[1]!.id, value: 89.56, absorbsRemainder: true },
+        ],
+        schedule: null,
+      });
+      expect(purchase.splits[0]!.value).toBe(10);
+    });
+  });
+
+  test("a fixed-mode split still rounds by currency when only splits change", () => {
+    withDigits("EUR", 0, () => {
+      const data = draft();
+      const purchase = actions.addPurchase(data, {
+        date: "2026-09-14",
+        description: "Sofa",
+        total: { amount: 100, currency: "EUR" },
+        splitMode: "fixed",
+        splits: [{ postId: data.posts[0]!.id, value: 100, absorbsRemainder: true }],
+        schedule: null,
+      });
+      actions.updatePurchase(data, purchase.id, {
+        splits: [{ postId: data.posts[0]!.id, value: 42.61, absorbsRemainder: true }],
+      });
+      expect(data.purchases[0]!.splits[0]!.value).toBe(43);
+    });
+  });
+
+  test("a percent-mode split keeps 2 decimals whatever the currency does", () => {
+    withDigits("EUR", 0, () => {
+      const data = draft();
+      const purchase = actions.addPurchase(data, {
+        date: "2026-09-14",
+        description: "Sofa",
+        total: { amount: 100, currency: "EUR" },
+        splitMode: "percent",
+        splits: [{ postId: data.posts[0]!.id, value: 33.3333, absorbsRemainder: true }],
+        schedule: null,
+      });
+      expect(purchase.splits[0]!.value).toBe(33.33);
+    });
   });
 });

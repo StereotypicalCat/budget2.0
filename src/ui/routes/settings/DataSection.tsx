@@ -76,7 +76,17 @@ export function DataSection() {
     // replace, never after. If the backup itself fails, abort rather than
     // destroy the only copy of the user's data.
     if (!runExport(buildJsonExport)) return;
-    await store.replace(pending);
+    // The write itself can still fail — a full disk, evicted storage, a
+    // private-mode quota. Unguarded it is an unhandled rejection: the button
+    // appears to do nothing and the dialog stays open with no explanation.
+    // `pending` is deliberately kept on failure so the user can retry.
+    try {
+      await store.replace(pending);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setError(`Could not import: ${message}. Your data has not been changed.`);
+      return;
+    }
     setPending(null);
   }
 
