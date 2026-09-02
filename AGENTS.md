@@ -104,6 +104,13 @@ ship twice — re-introducing one is a regression, not a style choice.
   worker's precache list (`src/swPrecache.test.ts`) — which must contain no
   duplicate, because `cache.addAll` rejects on one, which is why the service
   worker had never once installed in any environment.
+- **Every repository path named in a navigable document must exist** — this
+  file, `README.md`, and `docs/*.md`. → `src/docsLinks.test.ts`, added when the
+  docs moved into `docs/`: a restructure that quietly leaves thirty references
+  pointing at nothing is the failure mode, and nothing else would catch it. It
+  excludes `docs/specs/` and `docs/plans/` on purpose — those are dated records
+  of a moment, and a plan naming scaffolding it later deleted is accurate
+  history, not a broken link.
 
 Two rules with no test behind them. Only review catches these:
 
