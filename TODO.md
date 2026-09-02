@@ -3,10 +3,10 @@
 Work queued for whoever picks this up next, human or agent. Ordered. Each item
 says enough to act on without re-deriving the reasoning.
 
-**Current state:** branch `feature/versioned-rules`, 9 commits ahead of `main`,
-not merged, not pushed. 288 tests passing, `bunx tsc --noEmit` clean,
-`bun run build` succeeds. Versioned allocation rules are COMPLETE, all six
-tasks. Neither new editing surface has been seen in a browser — see section 5.
+**Current state:** branch `chore/todo-sweep`, not merged, not pushed. 344 tests
+passing, `bunx tsc --noEmit` clean, `bun run build` succeeds. Sections 2 and 4
+are DONE; section 3 is one of four sub-projects in. Every screen has now
+actually been looked at — see section 5.
 
 ---
 
@@ -35,9 +35,13 @@ fold). Worth a read before reviewing the diff.
 Not yet done for this feature: nobody has independently reviewed tasks 3-6, and
 no browser has seen the two new editing surfaces.
 
-## 2. Baked FX rates — designed and approved, not built
+## 2. ~~Baked FX rates~~ — DONE (`b4e1933`)
 
 So a fresh install can convert a EUR purchase on day one instead of erroring.
+Built as designed, all three build paths verified (live fetch, unreachable
+endpoint, `SKIP_FX_FETCH=1`), and confirmed in the real UI: Settings shows
+USD 6.449532 / EUR 7.474959 as `manual · 2026-09-01` on a fresh dataset.
+The reasoning below is kept because it is the reasoning, not a plan.
 
 - `build.ts` fetches DKK/USD/EUR at build time and embeds them via `define`;
   on any network failure it falls back to **committed constants** rather than
@@ -52,35 +56,55 @@ So a fresh install can convert a EUR purchase on day one instead of erroring.
   **argument**; the env read lives in a new `src/store/bakedRates.ts`, in the
   store layer, using the `try/catch` accessor pattern (see CLAUDE.md gotchas).
 
-## 3. Visual redesign
+## 3. Visual redesign — sub-project 1 of 4 DONE
 
 The owner's words: *"right now it looks a bit boring, simple and ugly. We want
-sleek, modern, and nice to use."* Sequencing was their explicit choice: finish
-all six rules tasks first, then redesign everything.
+sleek, modern, and nice to use."* Then, on scoping: both themes with a toggle,
+a full rethink of every screen, purchases compact and grouped by date, ship a
+webfont — and *"override everything you want for this step."*
 
-`PRODUCT.md` exists and holds product truth. There is no `DESIGN.md`; the
-incumbent visual world is the `--budget-*` tokens in `src/index.css` plus the
-design contract summarised in ARCHITECTURE.md. A redesign should treat that as
-evidence and anti-reference, not as something to preserve.
+**Spec:** `docs/superpowers/specs/2026-09-02-design-foundation-design.md`
 
-## 4. Smaller items, in no particular order
+**The diagnosis, which should shape the rest:** a design system already existed
+and was never wired up. `src/index.css` defined the paper/ink/teal palette with
+a contract document behind it, while the app painted shadcn's default white and
+near-black. The tokens reached the screen in two places only. Doing the
+foundation last is how that happened; do not repeat it.
 
-- **`confirmImport` has no `.catch`** (`src/ui/routes/settings/DataSection.tsx`).
-  A failed import write is an unhandled rejection with no error shown. One line.
-- **PNG icons 192/512 are not shipped**, so Chrome's install prompt is
-  incomplete. Binary assets cannot be generated in the agent environment; a
-  human needs to add them.
-- **`round2` in `src/store/actions.ts` hardcodes 2 decimals** rather than
-  reading `CURRENCY_DIGITS`. Correct for DKK/USD/EUR; silently wrong the day a
-  non-2dp currency is added. Same latent issue in `sliceTotal`
-  (`src/domain/plans.ts`).
-- **`EMPTY_FIGURES` (`src/domain/fold.ts`) is exported non-frozen** and returned
-  by shared reference from `figuresFor`. No consumer mutates it today;
-  `Object.freeze` is a one-line hardening.
-- **`buildWorkbook` calls `monthView` per (post, month)**, making a full ODS
-  export O(posts x months^2). Fine at personal-budget scale.
-- **The dev-only `src/manifest.webmanifest` placeholder hardcodes `scope: "/"`.**
-  Harmless in production, misleading if you dev-serve under a subpath.
+| # | Sub-project | State |
+|---|---|---|
+| 1 | Design foundation — two-theme tokens, theme toggle, self-hosted Inter + JetBrains Mono, one Section/Stat card, table furniture | DONE (`bb3c661`) |
+| 2 | Month view | date-grouped purchases DONE (`a159189`); income/totals block and the carry meter's presentation still open |
+| 3 | Year, Summary, Post detail | on the new foundation but not rethought. The 12-month matrix only fits by scrolling — decide whether compact number formatting replaces that |
+| 4 | Dialogs and fast entry | untouched. Native `<select>` elements are still browser-default, and `up`/`down`/`archive` are bare text buttons |
+
+**Watch for:** the brand teal is `--primary`, never `--accent` — shadcn's
+`--accent` is a hover *background* whose paired foreground must move with it.
+`src/cssPairs.test.ts` enforces the pairing, and `src/ui/cssTokens.test.ts`
+fails if a component names a token `index.css` does not define. That second
+guard exists because renaming `--rule` silently made the carry meter paint
+nothing: an undefined custom property inside `linear-gradient()` invalidates
+the whole declaration without warning.
+
+## 4. ~~Smaller items~~ — ALL DONE
+
+All six, `b9be882` / `71e8fc9` / `f50c65b`. Three were worse than recorded:
+
+- `confirmImport` now guards its write, and a source-level check covers the
+  whole UI (`b9be882`).
+- The PNG icons **were** generatable here — Chrome is on PATH and rasterizes
+  the SVG exactly. `scripts/make-icons.ts` produces them; they are committed,
+  precached, and pixel-verified against the source (`f50c65b`).
+- Split values now round by what they MEAN — money in "fixed" mode, a
+  percentage in "percent" mode. Narrower than the note claimed: `round2` was
+  always right for `Rule.percent`, which is not money (`b9be882`).
+- `EMPTY_FIGURES` is frozen (`b9be882`).
+- The ODS export was **not** "fine at personal-budget scale": 30 posts over 10
+  years took 7983 ms synchronously on the main thread. Now 135 ms, with
+  byte-identical output (`71e8fc9`).
+- The dev manifest did not merely hardcode `scope: "/"` — it was never served
+  at all; the catch-all answered with the HTML shell. One definition now feeds
+  the build and the dev server (`b9be882`).
 
 ## 5. Still needs a human
 
