@@ -55,6 +55,14 @@
   --surplus: #1f6640; /* carried-forward surplus */
   --overspend: #a5382a; /* negative balances only */
 
+  /* The chevron a native <select> draws for itself is the OS widget's, not
+     ours, so `appearance: none` removes it and this paints it back. It has to
+     be a data URI in a token rather than an inline SVG in the component: the
+     stroke colour cannot be `currentColor` inside a background-image, so the
+     glyph is re-declared per theme instead. Same path and stroke weight as
+     lucide's chevron-down, which is the icon family the rest of the app uses. */
+  --budget-select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23546575' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+
   /* Elevation is light and cool, never a grey drop shadow. */
   --budget-shadow-card: 0 1px 2px rgb(22 33 43 / 0.04), 0 8px 24px -12px rgb(22 33 43 / 0.12);
   --budget-shadow-raised: 0 1px 1px rgb(22 33 43 / 0.05), 0 2px 6px -2px rgb(22 33 43 / 0.08);
@@ -100,6 +108,9 @@
   --budget-tint: #1c2836;
   --surplus: #57bb83;
   --overspend: #f0866a;
+
+  /* Same glyph, lifted to the dark theme's muted ink. */
+  --budget-select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a7b8' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 
   /* Dark elevation reads as a lighter surface plus a hairline, not a shadow:
      shadows are invisible on a dark ground. */
