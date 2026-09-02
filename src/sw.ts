@@ -1,6 +1,8 @@
 /// <reference lib="webworker" />
 declare const self: ServiceWorkerGlobalScope;
 
+import { precacheUrls } from "./swPrecache.ts";
+
 // Both are replaced at build time by Bun.build's `define`.
 const PRECACHE: string[] = JSON.parse(process.env.PRECACHE_MANIFEST ?? "[]");
 const VERSION = process.env.SW_VERSION ?? "dev";
@@ -10,8 +12,10 @@ const CACHE = `budget2-${VERSION}`;
 const SHELL = `${BASE}index.html`;
 
 self.addEventListener("install", (event) => {
+  // Deduped: addAll() rejects the whole install on a repeated request, and the
+  // build's own outputs already contain the shell. See src/swPrecache.ts.
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll([...PRECACHE, SHELL])),
+    caches.open(CACHE).then((cache) => cache.addAll(precacheUrls(PRECACHE, SHELL))),
   );
 });
 

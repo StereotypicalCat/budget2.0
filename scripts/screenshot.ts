@@ -5,6 +5,7 @@
  *   bun scripts/screenshot.ts <url> <out.png> [--w=1280] [--h=900]
  *                             [--wait=1500] [--full] [--click=<selector>]
  *                             [--eval=<js>|--eval-file=<path>] [--dark] [--reload]
+ *                             [--profile=<dir>] [--eval-after-file=<path>]
  *
  * Why this exists: ARCHITECTURE.md and TODO.md both say nothing here can run a
  * browser, so appearance has never been verified. Chrome IS available, but its
@@ -40,6 +41,10 @@ const chrome = Bun.spawn(
     "--hide-scrollbars",
     "--force-device-scale-factor=1",
     "--remote-debugging-port=0",
+    // A fresh profile each run means empty IndexedDB, empty caches and NO
+    // registered service worker — which makes anything stateful across loads
+    // (an update prompt, a migration, an install) impossible to reproduce.
+    ...(flag("profile") ? [`--user-data-dir=${flag("profile")}`] : []),
     `--window-size=${width},${height}`,
     ...(has("dark") ? ["--force-dark-mode", "--enable-features=WebContentsForceDark"] : []),
     "about:blank",
@@ -169,6 +174,21 @@ if (clickSelector) {
   });
   console.log(`click ${clickSelector}: ${clicked?.result?.value}`);
   await Bun.sleep(700);
+}
+
+// Runs after the reload, so a flow that ends in a navigation can be observed
+// on the other side of it — an update prompt applying itself, a migration.
+const evalAfterFile = flag("eval-after-file");
+if (evalAfterFile) {
+  const source = await Bun.file(evalAfterFile).text();
+  const result = await send("Runtime.evaluate", {
+    expression: source,
+    awaitPromise: true,
+  });
+  console.log(
+    "eval-after:",
+    JSON.stringify(result?.result?.value ?? result?.result?.description ?? null),
+  );
 }
 
 const shot = await send("Page.captureScreenshot", {

@@ -37,9 +37,24 @@ const server = serve({
     // clients and handles no fetches keeps registration honest in dev without
     // caching anything, which would fight HMR.
     [`${basePath}sw.js`]: () =>
-      new Response("/* dev: intentionally does nothing */\n", {
-        headers: { "content-type": "text/javascript", "cache-control": "no-cache" },
-      }),
+      new Response(
+        // Caches nothing — that would fight HMR — but it DOES honour the
+        // lifecycle, so the update prompt's Reload button behaves in dev the
+        // way it behaves in production instead of only ever hitting the
+        // timeout backstop.
+        [
+          "/* dev worker: no caching, real lifecycle */",
+          'self.addEventListener("install", () => self.skipWaiting());',
+          'self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));',
+          'self.addEventListener("message", (e) => {',
+          '  if (e.data && e.data.type === "SKIP_WAITING") self.skipWaiting();',
+          "});",
+          "",
+        ].join("\n"),
+        {
+          headers: { "content-type": "text/javascript", "cache-control": "no-cache" },
+        },
+      ),
     // The @font-face rules are injected by frontend.tsx; these serve the
     // files those rules point at.
     ...Object.fromEntries(
