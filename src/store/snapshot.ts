@@ -13,6 +13,7 @@ export interface SnapshotStore {
   get(): Dataset;
   mutate(fn: (draft: Dataset) => void): Promise<void>;
   replace(dataset: Dataset): Promise<void>;
+  reset(): Promise<void>;
   subscribe(listener: Listener): () => void;
 }
 
@@ -86,6 +87,19 @@ export function createSnapshotStore(
 
     replace(dataset) {
       return enqueue(() => commit(dataset));
+    },
+
+    /**
+     * Back to first-run state: the seed posts, the seed currency table and the
+     * seed rates this store was built with. Seeding lives here rather than in
+     * the UI so "reset" and "a brand-new browser" cannot drift apart — they
+     * are the same call.
+     *
+     * Goes through the queue like every other write, so a reset issued while a
+     * mutation is still in flight cannot be overtaken by it.
+     */
+    reset() {
+      return enqueue(() => commit(createSeedDataset(currentMonth, seedRates)));
     },
 
     subscribe(listener) {
