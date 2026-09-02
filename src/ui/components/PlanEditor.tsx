@@ -61,7 +61,7 @@ export function PlanEditor({ draft, onChange }: Props) {
   }
 
   return (
-    <fieldset className="space-y-3 rounded border p-3">
+    <fieldset className="space-y-3 rounded-md border border-budget-rule p-3">
       <div className="flex items-center justify-between">
         <Label>Finance plan</Label>
         <div className="flex items-center gap-2 text-xs">
@@ -79,7 +79,7 @@ export function PlanEditor({ draft, onChange }: Props) {
               }
             }}
           />
-          <Button type="button" size="sm" variant="ghost" onClick={() => onChange(withoutPlan(draft))}>
+          <Button type="button" size="xs" variant="ghost" className="-mr-2" onClick={() => onChange(withoutPlan(draft))}>
             remove plan
           </Button>
         </div>

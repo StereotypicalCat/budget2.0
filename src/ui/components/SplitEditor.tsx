@@ -2,7 +2,9 @@ import { Button } from "@/components/ui/button";
 import { useDataset } from "../hooks/useDataset.ts";
 import { digitsFor } from "../../domain/currencies.ts";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Label } from "@/components/ui/label";
+import { Segmented } from "./Segmented.tsx";
 import { formatAmount } from "../format.ts";
 import type { PurchaseDraft, SplitDraft } from "../purchaseForm.ts";
 import { splitBalance } from "../purchaseForm.ts";
@@ -39,25 +41,24 @@ export function SplitEditor({ draft, posts, onChange }: Props) {
     <fieldset className="space-y-3">
       <div className="flex items-center justify-between">
         <Label>Split across posts</Label>
-        <div className="flex gap-1 text-xs">
-          {(["percent", "fixed"] as const).map((mode) => (
-            <Button
-              key={mode}
-              type="button"
-              size="sm"
-              variant={draft.splitMode === mode ? "default" : "outline"}
-              onClick={() => onChange({ ...draft, splitMode: mode })}
-            >
-              {mode === "percent" ? "Percentages" : "Amounts"}
-            </Button>
-          ))}
-        </div>
+        <Segmented
+          label="Split by"
+          value={draft.splitMode}
+          onChange={(splitMode) => onChange({ ...draft, splitMode })}
+          options={[
+            { value: "percent", label: "Percentages" },
+            { value: "fixed", label: "Amounts" },
+          ]}
+        />
       </div>
 
       {draft.splits.map((split, index) => (
         <div key={index} className="flex items-center gap-2">
-          <select
-            className="h-9 flex-1 rounded border bg-background px-2 text-sm"
+          {/* `min-w-0` comes from NativeSelect. Without it `flex-1` could not
+              shrink below the widest option, and this row's min-content width
+              was what pushed the whole dialog past its own padding. */}
+          <NativeSelect
+            className="flex-1"
             value={split.postId}
             onChange={(event) => updateSplit(index, { postId: event.target.value })}
           >
@@ -67,7 +68,7 @@ export function SplitEditor({ draft, posts, onChange }: Props) {
                 {post.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
 
           <Input
             type="number"
@@ -80,10 +81,14 @@ export function SplitEditor({ draft, posts, onChange }: Props) {
           />
           <span className="w-10 text-xs text-muted-foreground">{unit}</span>
 
-          <label className="flex items-center gap-1 text-xs" title="This post absorbs rounding">
+          <label
+            className="flex shrink-0 items-center gap-1.5 rounded-md py-1.5 text-xs"
+            title="This post absorbs rounding"
+          >
             <input
               type="radio"
               name="absorber"
+              className="size-3.5"
               checked={split.absorbsRemainder}
               onChange={() => setAbsorber(index)}
             />
@@ -92,8 +97,9 @@ export function SplitEditor({ draft, posts, onChange }: Props) {
 
           <Button
             type="button"
-            size="sm"
+            size="xs"
             variant="ghost"
+            className="-mr-2 shrink-0"
             disabled={draft.splits.length === 1}
             onClick={() =>
               onChange({

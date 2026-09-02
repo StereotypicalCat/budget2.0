@@ -1,6 +1,8 @@
 import { useRef } from "react";
+import { XIcon } from "lucide-react";
 import { useDataset } from "../hooks/useDataset.ts";
 import { digitsFor } from "../../domain/currencies.ts";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatMoney } from "../format.ts";
@@ -113,15 +115,20 @@ export function BulkLines({ draft, onChange }: Props) {
               }}
             />
 
-            <button
+            {/* Was a bare `&times;` in a 20px-wide box: a text glyph doing an
+                icon's job, at a size nothing could hit. lucide's X is the icon
+                family the dialog's own close button already uses. */}
+            <Button
               type="button"
               tabIndex={-1}
+              variant="ghost"
+              size="icon-xs"
               aria-label={`Remove line ${index + 1}`}
-              className="w-5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-[var(--overspend)]"
+              className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-overspend"
               onClick={() => removeLine(index)}
             >
-              &times;
-            </button>
+              <XIcon />
+            </Button>
           </div>
         ))}
       </div>

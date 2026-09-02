@@ -9,7 +9,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Label } from "@/components/ui/label";
+import { Segmented } from "./Segmented.tsx";
 import { SplitEditor } from "./SplitEditor.tsx";
 import { PlanEditor } from "./PlanEditor.tsx";
 import { BulkLines } from "./BulkLines.tsx";
@@ -108,19 +110,15 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
         </DialogHeader>
 
         {!purchase && (
-          <div className="flex gap-1">
-            {(["one", "many"] as const).map((option) => (
-              <Button
-                key={option}
-                type="button"
-                size="sm"
-                variant={mode === option ? "default" : "outline"}
-                onClick={() => setMode(option)}
-              >
-                {option === "one" ? "One purchase" : "Many lines"}
-              </Button>
-            ))}
-          </div>
+          <Segmented
+            label="How many purchases to add"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: "one", label: "One purchase" },
+              { value: "many", label: "Many lines" },
+            ]}
+          />
         )}
 
         <div className="space-y-4">
@@ -142,9 +140,7 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
                       setBulk((b) => ({ ...b, date }));
                     }}
                   />
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground underline"
+                  <DateModeToggle
                     onClick={() =>
                       setBulk((b) => ({
                         ...b,
@@ -153,13 +149,12 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
                     }
                   >
                     {bulk.date.length > 7 ? "use the month only" : "set exact date"}
-                  </button>
+                  </DateModeToggle>
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="bulk-post">Post</Label>
-                  <select
+                  <NativeSelect
                     id="bulk-post"
-                    className="h-9 w-full rounded border bg-background px-2 text-sm"
                     value={bulk.postId}
                     onChange={(event) => {
                       const postId = event.target.value;
@@ -172,13 +167,12 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
                         {post.name}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="bulk-currency">Currency</Label>
-                  <select
+                  <NativeSelect
                     id="bulk-currency"
-                    className="h-9 w-full rounded border bg-background px-2 text-sm"
                     value={bulk.currency}
                     onChange={(event) => {
                       const currency = event.target.value as typeof bulk.currency;
@@ -190,7 +184,7 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
                         {currency}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
               </div>
 
@@ -220,24 +214,20 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
                       setDraft((d) => ({ ...d, date }));
                     }}
                   />
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground underline"
+                  <DateModeToggle
                     onClick={() => setDraft((d) => ({ ...d, date: d.date.slice(0, 7) }))}
                   >
                     use the month only
-                  </button>
+                  </DateModeToggle>
                 </>
               ) : (
                 <>
                   <Input id="purchase-date" value={draft.date} readOnly className="font-money" />
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground underline"
+                  <DateModeToggle
                     onClick={() => setDraft((d) => ({ ...d, date: `${d.date}-01` }))}
                   >
                     set exact date
-                  </button>
+                  </DateModeToggle>
                 </>
               )}
             </div>
@@ -275,9 +265,8 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
             </div>
             <div className="space-y-1">
               <Label htmlFor="purchase-currency">Currency</Label>
-              <select
+              <NativeSelect
                 id="purchase-currency"
-                className="h-9 w-full rounded border bg-background px-2 text-sm"
                 value={draft.currency}
                 onChange={(event) =>
                   setDraft({ ...draft, currency: event.target.value as typeof draft.currency })
@@ -288,7 +277,7 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
                     {currency}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
           </div>
 
@@ -344,5 +333,34 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * "set exact date" / "use the month only", under the date field.
+ *
+ * Was a bare `<button>` with no padding at all: a 15px-tall hit target under a
+ * 36px field, which is under the 24px minimum and impossible to hit on a
+ * phone. `size="xs"` gives it a real 24px box, and the negative left margin
+ * cancels the button's own padding so the text still lines up with the field's
+ * left edge rather than sitting 8px in from it.
+ */
+function DateModeToggle({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="xs"
+      className="-ml-2 font-normal text-muted-foreground underline decoration-dotted underline-offset-2"
+      onClick={onClick}
+    >
+      {children}
+    </Button>
   );
 }
