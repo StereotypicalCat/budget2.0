@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useDataset } from "../hooks/useDataset.ts";
 import { useMutate } from "../hooks/useMutate.ts";
 import { monthView, type MonthViewModel } from "../../domain/views.ts";
@@ -42,9 +43,9 @@ export function MonthRoute() {
           className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm"
         >
           <span>Could not save: {error}</span>
-          <button onClick={clearError} className="underline underline-offset-2">
+          <Button variant="ghost" size="xs" className="-mr-1 shrink-0" onClick={clearError}>
             dismiss
-          </button>
+          </Button>
         </div>
       )}
 
@@ -190,41 +191,63 @@ function PurchaseRow({
 }) {
   const slice = sliceAmountForMonth(purchase, monthId)!;
   return (
-    <li className="group flex items-center gap-3 rounded-md px-1 py-1.5 transition-colors hover:bg-accent/60">
-      <span className="min-w-0 flex-1 truncate">
+    // `-mx-2 px-2` rather than `px-1`: the row's text now starts exactly where
+    // its own date heading does — `px-1` indented it 4px past the heading —
+    // and the hover wash bleeds 8px outward, so the highlight has an inset
+    // instead of stopping flush against the first character.
+    //
+    // One line from `sm:` up, two below it. At 390px this row's fixed parts —
+    // a mono amount, "edit", "delete" — take about 215px of a 350px card,
+    // which left the description roughly 110px: it truncated to "Weeken…",
+    // then "Bik…", and on the financed row to nothing but its badge. The
+    // description is the only part that says what the purchase WAS, so at that
+    // width it gets a line to itself and everything else gets the next one.
+    // The same call PostTable already makes, for the same reason.
+    <li className="group -mx-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-2 transition-colors hover:bg-accent/60 sm:flex-nowrap sm:py-1.5">
+      <span className="min-w-0 flex-1 sm:truncate">
         {purchase.description}
         {purchase.note && (
           <span className="ml-2 text-xs text-budget-ink-muted">{purchase.note}</span>
         )}
       </span>
-      {purchase.schedule && (
-        <span className="shrink-0 rounded-full border border-budget-rule px-1.5 py-px text-[0.625rem] uppercase tracking-wide text-budget-ink-muted">
-          financed
+
+      {/* `sm:contents` dissolves this wrapper from `sm:` up, so the desktop row
+          is exactly the flat flex line it has always been. Below `sm:` it is
+          the second line, and its `w-full` is what forces the wrap. */}
+      <span className="flex w-full items-center gap-3 sm:contents">
+        {purchase.schedule && (
+          <span className="shrink-0 rounded-full border border-budget-rule px-1.5 py-px text-[0.625rem] uppercase tracking-wide text-budget-ink-muted">
+            financed
+          </span>
+        )}
+        <span className="font-money shrink-0 tabular-nums">
+          {formatMoney(slice.amount, slice.currency)}
         </span>
-      )}
-      <span className="font-money shrink-0 tabular-nums">
-        {formatMoney(slice.amount, slice.currency)}
-      </span>
-      {/* Held at a fixed width so revealing the actions on hover cannot shift
-          the amounts, which are the column being read down. */}
-      <span className="flex w-[7.5rem] shrink-0 justify-end gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-        <PurchaseDialog
-          monthId={monthId}
-          purchase={purchase}
-          trigger={
-            <Button size="sm" variant="ghost">
-              edit
-            </Button>
-          }
-        />
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-overspend hover:text-overspend"
-          onClick={onDelete}
-        >
-          delete
-        </Button>
+
+        {/* From `sm:` up: revealed on hover, and held at a fixed width so
+            revealing it cannot shift the amounts, which are the column being
+            read down. Below `sm:`: always visible. A phone has no hover, so
+            `opacity-0` had made these two the hardest controls in the app to
+            reach, while still reserving 120px of the row to hide them in. */}
+        <span className="ms-auto flex shrink-0 items-center justify-end gap-1 sm:ms-0 sm:w-[6.5rem] sm:opacity-0 sm:transition-opacity sm:focus-within:opacity-100 sm:group-hover:opacity-100">
+          <PurchaseDialog
+            monthId={monthId}
+            purchase={purchase}
+            trigger={
+              <Button size="xs" variant="ghost">
+                edit
+              </Button>
+            }
+          />
+          <Button
+            size="xs"
+            variant="ghost"
+            className="-mr-2 text-overspend hover:text-overspend"
+            onClick={onDelete}
+          >
+            delete
+          </Button>
+        </span>
       </span>
     </li>
   );
@@ -260,7 +283,7 @@ function MonthStep({ to, label, back = false }: { to: string; label: string; bac
   return (
     <Link
       to={to}
-      className="font-money rounded-md px-1.5 py-0.5 text-xs text-budget-ink-muted transition-colors hover:bg-accent hover:text-budget-ink"
+      className="font-money shrink-0 rounded-md px-1.5 py-1 text-xs whitespace-nowrap text-budget-ink-muted transition-colors hover:bg-accent hover:text-budget-ink"
     >
       {back ? `\u2190 ${label}` : `${label} \u2192`}
     </Link>
@@ -307,12 +330,12 @@ function RuleFromMonth({
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-2 rounded border p-3 text-sm">
+    <div className="budget-card flex flex-wrap items-end gap-2 p-4 text-sm">
       <span>
         {post.name}: allocate from <span className="font-money">{monthId}</span> onward
       </span>
-      <select
-        className="h-8 rounded border bg-background px-1 text-xs"
+      <NativeSelect
+        className="h-8 w-auto text-xs md:text-xs"
         aria-label="Rule kind"
         value={kind}
         onChange={(event) => {
@@ -322,7 +345,7 @@ function RuleFromMonth({
       >
         <option value="percentOfIncome">% of income</option>
         <option value="fixed">fixed amount</option>
-      </select>
+      </NativeSelect>
       <Input
         className="font-money h-8 w-24"
         type="number"
