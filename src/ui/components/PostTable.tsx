@@ -148,7 +148,11 @@ function ChangeRuleButton({
   return (
     <button
       type="button"
-      className={`rounded text-budget-ink-muted underline decoration-dotted underline-offset-2 transition-opacity hover:text-budget-accent ${className}`}
+      // `-my-1 py-1 -mx-1 px-1` is a hit area, not spacing: the label is a
+      // single line of 11px text, so untouched it is a 15px-tall target. The
+      // negative margins cancel the padding, so nothing moves and the row's
+      // baselines are unchanged.
+      className={`-mx-1 -my-1 rounded-sm px-1 py-1 text-budget-ink-muted underline decoration-dotted underline-offset-2 transition-opacity hover:text-budget-accent ${className}`}
       onClick={() => onChangeRule(postId)}
     >
       change from here

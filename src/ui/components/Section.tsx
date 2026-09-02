@@ -28,8 +28,14 @@ export function Section({ title, action, hint, children, className = "" }: Props
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             {title && <h2 className="text-base leading-tight">{title}</h2>}
+            {/* Capped measure. Uncapped, the Currencies and Posts hints ran
+                the full 1140px of the card at 12px — about 160 characters a
+                line, more than twice a readable measure, and both wrapped to
+                three lines that read as a wall rather than as one aside. */}
             {hint && (
-              <p className="mt-1 text-xs leading-relaxed text-budget-ink-muted">{hint}</p>
+              <p className="mt-1 max-w-[75ch] text-xs leading-relaxed text-budget-ink-muted">
+                {hint}
+              </p>
             )}
           </div>
           {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}

@@ -12,7 +12,7 @@ export function UpdatePrompt() {
   if (!ready) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 flex items-center gap-3 rounded border bg-background p-3 text-sm shadow-lg">
+    <div className="fixed bottom-4 right-4 flex items-center gap-3 rounded-lg border border-budget-rule bg-background p-4 text-sm shadow-lg">
       <span>A new version is ready.</span>
       <Button size="sm" onClick={applyUpdate}>
         Reload
