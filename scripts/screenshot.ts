@@ -7,7 +7,7 @@
  *                             [--eval=<js>|--eval-file=<path>] [--dark] [--reload]
  *                             [--profile=<dir>] [--eval-after-file=<path>]
  *
- * Why this exists: ARCHITECTURE.md and TODO.md both say nothing here can run a
+ * Why this exists: docs/ARCHITECTURE.md and docs/TODO.md both say nothing here can run a
  * browser, so appearance has never been verified. Chrome IS available, but its
  * plain `--screenshot` flag fires on the load event — before this app's async
  * IndexedDB read resolves, which captures an empty page. Driving CDP directly

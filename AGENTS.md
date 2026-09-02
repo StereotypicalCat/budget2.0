@@ -6,13 +6,13 @@ validation this codebase deliberately does not perform.
 
 Then, depending on what you are doing:
 
-- **Changing anything structural** → `ARCHITECTURE.md` (layers, data flow, and
+- **Changing anything structural** → `docs/ARCHITECTURE.md` (layers, data flow, and
   why the non-obvious choices are what they are).
-- **Picking up queued work** → `TODO.md` (ordered, each item carrying the
+- **Picking up queued work** → `docs/TODO.md` (ordered, each item carrying the
   reasoning already settled).
-- **Making a product decision** → `PRODUCT.md` (who this is for, what must never
+- **Making a product decision** → `docs/PRODUCT.md` (who this is for, what must never
   break, and what must not be invented).
-- **Wondering why something is the way it is** → `docs/superpowers/specs/`
+- **Wondering why something is the way it is** → `docs/specs/`
   records the decisions *and the alternatives that were rejected*.
 
 Two rules worth knowing before your first edit:

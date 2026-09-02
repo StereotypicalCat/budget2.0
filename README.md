@@ -53,5 +53,5 @@ your current data first.
 
 ## Documentation
 
-- Design: `docs/superpowers/specs/2026-09-01-budget-app-design.md`
-- Implementation plan: `docs/superpowers/plans/2026-09-01-budget-app.md`
+- Design: `docs/specs/2026-09-01-budget-app-design.md`
+- Implementation plan: `docs/plans/2026-09-01-budget-app.md`

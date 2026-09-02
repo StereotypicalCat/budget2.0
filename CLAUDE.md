@@ -144,11 +144,11 @@ For more information, read the Bun API docs in `node_modules/bun-types/docs/**.m
 
 ## Start here
 
-- `ARCHITECTURE.md` — layers, data flow, and why the non-obvious choices are
+- `docs/ARCHITECTURE.md` — layers, data flow, and why the non-obvious choices are
   what they are. Read it before changing anything structural.
-- `TODO.md` — queued work, each item carrying the reasoning already settled.
-- `PRODUCT.md` — who this is for and what must never break.
-- `docs/superpowers/specs/` — design decisions, including alternatives rejected.
+- `docs/TODO.md` — queued work, each item carrying the reasoning already settled.
+- `docs/PRODUCT.md` — who this is for and what must never break.
+- `docs/specs/` — design decisions, including alternatives rejected.
 
 ## Gotchas that cost real bugs
 

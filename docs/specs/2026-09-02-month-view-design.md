@@ -19,7 +19,7 @@ Three problems, found by looking at the rendered page in Chrome at 1280px and
 Income, Allocated, Spent and Unallocated sat in one row at one weight. The
 income *input* — the only editable thing on the screen — was in the same visual
 register as three numbers derived from it. And nothing at the month level
-answered the second of PRODUCT.md's two questions, *did I overspend*: with
+answered the second of docs/PRODUCT.md's two questions, *did I overspend*: with
 Transport at −3,200 DKK, you had to read down the Remaining column to find out.
 
 **The carry meter belonged to the wrong row.** It is the design contract's
@@ -41,7 +41,7 @@ Three zones in reading order, in the one `Section` card, on the paper ground
 below the unchanged month `<header>`.
 
 1. **Income** — the field. Unchanged in behaviour: still `type="number"`, still
-   base-currency only. Section 6 of TODO.md records the reasoning — a month has
+   base-currency only. Section 6 of docs/TODO.md records the reasoning — a month has
    one income, so making the field parse a currency the way the purchase total
    does is arguably wrong rather than merely undone. It keeps field affordance
    so it stays visibly the one editable thing on the screen.

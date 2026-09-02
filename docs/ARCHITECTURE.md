@@ -175,7 +175,7 @@ timing that happy-dom does not reproduce.
 
 ## Where the reasoning lives
 
-- `PRODUCT.md` — durable product truth: who it is for, what must never break.
-- `TODO.md` — queued work, with the reasoning behind each decision already made.
-- `docs/superpowers/specs/` — design decisions and the alternatives rejected.
-- `docs/superpowers/plans/` — task-by-task implementation plans.
+- `docs/PRODUCT.md` — durable product truth: who it is for, what must never break.
+- `docs/TODO.md` — queued work, with the reasoning behind each decision already made.
+- `docs/specs/` — design decisions and the alternatives rejected.
+- `docs/plans/` — task-by-task implementation plans.

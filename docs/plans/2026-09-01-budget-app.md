@@ -15,7 +15,7 @@
 
 **Tech Stack:** Bun 1.3+ (runtime, package manager, bundler, test runner), React 19, Tailwind 4, shadcn/ui, `fflate` for ODS zip generation, hand-written service worker. No Vite. No Electron.
 
-**Spec:** `docs/superpowers/specs/2026-09-01-budget-app-design.md`
+**Spec:** `docs/specs/2026-09-01-budget-app-design.md`
 
 ## Global Constraints
 
@@ -177,7 +177,7 @@ The scaffolded `CLAUDE.md` documents Bun idioms. Append the rules specific to th
   reimplement the math.
 - Over-budget is always allowed. Never add validation that blocks it.
 - Base path comes from `BUN_PUBLIC_BASE_PATH`; never hardcode a subpath.
-- Read the spec at `docs/superpowers/specs/2026-09-01-budget-app-design.md`.
+- Read the spec at `docs/specs/2026-09-01-budget-app-design.md`.
 ```
 
 - [ ] **Step 8: Ignore the IDE directory**
@@ -7357,8 +7357,8 @@ your current data first.
 
 ## Documentation
 
-- Design: `docs/superpowers/specs/2026-09-01-budget-app-design.md`
-- Implementation plan: `docs/superpowers/plans/2026-09-01-budget-app.md`
+- Design: `docs/specs/2026-09-01-budget-app-design.md`
+- Implementation plan: `docs/plans/2026-09-01-budget-app.md`
 ```
 
 - [ ] **Step 7: Final verification**

@@ -315,5 +315,5 @@ migrations are mandatory rather than optional.
   invariants: the domain layer stays free of React and IndexedDB, money
   rounds at every boundary, the last distributed part is computed by
   subtraction, and the rollover fold has exactly one implementation.
-- `docs/superpowers/specs/` — this document
-- `docs/superpowers/plans/` — the implementation plan, written next
+- `docs/specs/` — this document
+- `docs/plans/` — the implementation plan, written next

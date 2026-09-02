@@ -76,7 +76,7 @@ rather than on the arithmetic.
 
 Inter for text, JetBrains Mono for figures, both variable, both self-hosted,
 latin + latin-ext only. SIL OFL 1.1; licences committed beside the files.
-Self-hosted rather than CDN-linked because PRODUCT.md's position is that the
+Self-hosted rather than CDN-linked because docs/PRODUCT.md's position is that the
 data never leaves the browser and the app needs no third party — a font request
 to another origin on every cold load quietly contradicts that.
 

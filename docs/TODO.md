@@ -17,8 +17,8 @@ behaviour-preserving by construction and tested as such.
 
 ## 1. ~~Time-versioned allocation rules~~ — DONE, all six tasks
 
-**Spec:** `docs/superpowers/specs/2026-09-02-versioned-allocation-rules-design.md`
-**Plan:** `docs/superpowers/plans/2026-09-02-versioned-allocation-rules.md`
+**Spec:** `docs/specs/2026-09-02-versioned-allocation-rules-design.md`
+**Plan:** `docs/plans/2026-09-02-versioned-allocation-rules.md`
 **Ledger + extracted briefs:** `.superpowers/sdd/2026-09-02-versioned-allocation-rules/`
 
 | Task | What | Commit |
@@ -68,7 +68,7 @@ sleek, modern, and nice to use."* Then, on scoping: both themes with a toggle,
 a full rethink of every screen, purchases compact and grouped by date, ship a
 webfont — and *"override everything you want for this step."*
 
-**Spec:** `docs/superpowers/specs/2026-09-02-design-foundation-design.md`
+**Spec:** `docs/specs/2026-09-02-design-foundation-design.md`
 
 **The diagnosis, which should shape the rest:** a design system already existed
 and was never wired up. `src/index.css` defined the paper/ink/teal palette with
@@ -84,7 +84,7 @@ foundation last is how that happened; do not repeat it.
 | 4 | Dialogs and fast entry | untouched. Native `<select>` elements are still browser-default, and `up`/`down`/`archive` are bare text buttons |
 
 **Sub-project 2, for whoever does 3 and 4.** Spec:
-`docs/superpowers/specs/2026-09-02-month-view-design.md`. Three things it
+`docs/specs/2026-09-02-month-view-design.md`. Three things it
 settled that the reporting screens should follow rather than re-decide:
 
 - **Meter geometry is `src/ui/meterSegments.ts`**, pure and tested, with

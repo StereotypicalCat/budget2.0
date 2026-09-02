@@ -8,7 +8,7 @@
 
 **Tech Stack:** Bun (runtime, package manager, test runner), TypeScript strict, React 19, Tailwind 4, shadcn/ui. No new dependencies.
 
-**Spec:** `docs/superpowers/specs/2026-09-02-versioned-allocation-rules-design.md`
+**Spec:** `docs/specs/2026-09-02-versioned-allocation-rules-design.md`
 
 ## Global Constraints
 
