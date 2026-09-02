@@ -28,6 +28,7 @@ export const SEED_CURRENCIES: readonly CurrencyDef[] = [
   { code: "DKK", digits: 2, symbol: "kr", name: "Danish krone" },
   { code: "USD", digits: 2, symbol: "$", name: "US dollar" },
   { code: "EUR", digits: 2, symbol: "\u20ac", name: "Euro" },
+  { code: "GBP", digits: 2, symbol: "\u00a3", name: "British pound" },
 ];
 
 /** Used when a currency has no definition. Two places is right almost always. */

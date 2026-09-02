@@ -1,6 +1,31 @@
 import { SCHEMA_VERSION } from "../domain/seed.ts";
-import { SEED_CURRENCIES } from "../domain/types.ts";
 import { STALE_FX_API_URL } from "./fxApi.ts";
+
+/**
+ * What the 2 -> 3 step has always produced, frozen HERE rather than imported
+ * from the live seed table.
+ *
+ * This module must not read today's defaults. It originally seeded the live
+ * seed-currency table by reference, so adding a currency there would have
+ * retroactively changed what an old dataset received from a step it had already
+ * been through — silently, and only for whoever had not migrated yet.
+ * `src/store/migrations.test.ts` fails if a live default is referenced again;
+ * it matches source text, so do not name those constants even in a comment.
+ */
+const V3_SEED_CURRENCIES = [
+  { code: "DKK", digits: 2, symbol: "kr", name: "Danish krone" },
+  { code: "USD", digits: 2, symbol: "$", name: "US dollar" },
+  { code: "EUR", digits: 2, symbol: "\u20ac", name: "Euro" },
+];
+
+/** Sterling as 4 -> 5 adds it. Frozen for the same reason as the list above. */
+const V5_GBP = { code: "GBP", digits: 2, symbol: "\u00a3", name: "British pound" };
+const V5_GBP_RATE = {
+  currency: "GBP",
+  baseUnitsPerOne: 8.704735,
+  updatedAt: "2026-09-02",
+  source: "manual" as const,
+};
 import type { Dataset } from "../domain/types.ts";
 
 export class UnsupportedSchemaError extends Error {
@@ -55,7 +80,7 @@ const MIGRATIONS: Array<(data: any) => any> = [
     settings: { ...data.settings, schemaVersion: 3 },
     currencies: Array.isArray(data.currencies)
       ? data.currencies
-      : SEED_CURRENCIES.map((currency) => ({ ...currency })),
+      : V3_SEED_CURRENCIES.map((currency) => ({ ...currency })),
   }),
 
   // 3 -> 4: drop a stored rate-service URL that can no longer work.
@@ -80,6 +105,34 @@ const MIGRATIONS: Array<(data: any) => any> = [
         fxApiUrl === STALE_FX_API_URL
           ? { ...settings, schemaVersion: 4 }
           : { ...data.settings, schemaVersion: 4 },
+    };
+  },
+
+  // 4 -> 5: sterling joins the currencies the app ships with, and an existing
+  // dataset gets it too. Baked currencies and rates seed a NEW dataset and
+  // nothing else, so without this step the owner would have to type the code,
+  // name, symbol and decimals by hand to spend in a currency the app now
+  // claims to ship.
+  //
+  // The rate is supplied because there is no prior choice to overwrite: GBP has
+  // never existed in this dataset, so nothing is being silently replaced. That
+  // is the line the "rates never backstop a cleared rate" rule draws — it
+  // forbids re-supplying a number the owner removed, not introducing one for a
+  // currency they have never had. A GBP the owner already defined, or a GBP
+  // rate they already hold, is left exactly as it is.
+  //
+  // No stored figure changes: adding a currency definition and a rate for a
+  // currency nothing yet references cannot alter an amount already recorded.
+  (data: any) => {
+    const currencies = Array.isArray(data.currencies) ? data.currencies : [];
+    const fxRates = Array.isArray(data.fxRates) ? data.fxRates : [];
+    const hasGbp = currencies.some((c: any) => c?.code === "GBP");
+    const hasGbpRate = fxRates.some((r: any) => r?.currency === "GBP");
+    return {
+      ...data,
+      settings: { ...data.settings, schemaVersion: 5 },
+      currencies: hasGbp ? currencies : [...currencies, { ...V5_GBP }],
+      fxRates: hasGbpRate || hasGbp ? fxRates : [...fxRates, { ...V5_GBP_RATE }],
     };
   },
 ];

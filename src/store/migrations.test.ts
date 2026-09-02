@@ -167,10 +167,13 @@ describe("v2 -> v3: currencies become data", () => {
   test("the three shipped currencies are added, with their decimals", () => {
     const migrated = migrate(v2());
     expect(migrated.settings.schemaVersion).toBe(SCHEMA_VERSION);
+    // The first three come from this step, frozen at what it always produced.
+    // GBP is appended later, by 4 -> 5; see that block.
     expect(migrated.currencies).toEqual([
       { code: "DKK", digits: 2, symbol: "kr", name: "Danish krone" },
       { code: "USD", digits: 2, symbol: "$", name: "US dollar" },
       { code: "EUR", digits: 2, symbol: "€", name: "Euro" },
+      { code: "GBP", digits: 2, symbol: "£", name: "British pound" },
     ]);
   });
 
@@ -191,7 +194,9 @@ describe("v2 -> v3: currencies become data", () => {
     const migrated = migrate(structuredClone(before));
     expect(migrated.posts).toEqual(before.posts);
     expect(migrated.months).toEqual(before.months);
-    expect(migrated.fxRates).toEqual(before.fxRates);
+    // Sterling's rate arrives later, in 4 -> 5; nothing this step does touches
+    // the rate table.
+    expect(migrated.fxRates.filter((r) => r.currency !== "GBP")).toEqual(before.fxRates);
     expect(migrated.settings.baseCurrency).toBe("DKK");
     expect(migrated.settings.foldStartMonth).toBe("2026-01");
   });
@@ -218,7 +223,7 @@ describe("v2 -> v3: currencies become data", () => {
     expect(migrated.posts[0]!.rules).toEqual([
       { from: "2026-01", rule: { kind: "fixed", amount: { amount: 500, currency: "DKK" } } },
     ]);
-    expect(migrated.currencies.map((c) => c.code)).toEqual(["DKK", "USD", "EUR"]);
+    expect(migrated.currencies.map((c) => c.code)).toEqual(["DKK", "USD", "EUR", "GBP"]);
   });
 
   /**
@@ -230,7 +235,9 @@ describe("v2 -> v3: currencies become data", () => {
     const data = v2();
     data.currencies = [{ code: "DKK", digits: 2 }, { code: "JPY", digits: 0 }];
     const migrated = migrate(data);
-    expect(migrated.currencies.map((c) => c.code)).toEqual(["DKK", "JPY"]);
+    // JPY survives, which is the point: the step appends nothing and discards
+    // nothing. GBP is appended afterwards by 4 -> 5.
+    expect(migrated.currencies.map((c) => c.code)).toEqual(["DKK", "JPY", "GBP"]);
   });
 });
 
@@ -253,7 +260,7 @@ describe("v3 -> v4: the stale rate-service URL is dropped", () => {
 
   test("a dataset holding the dead default loses the field entirely", () => {
     const out = migrate(v3(STALE));
-    expect(out.settings.schemaVersion).toBe(4);
+    expect(out.settings.schemaVersion).toBe(SCHEMA_VERSION);
     // Removed rather than rewritten to the new URL, so the dataset follows
     // whatever the current default is and a future endpoint move needs no
     // second migration for the same user.
@@ -268,6 +275,93 @@ describe("v3 -> v4: the stale rate-service URL is dropped", () => {
   test("a dataset that never stored a URL is untouched apart from the version", () => {
     const out = migrate(v3());
     expect("fxApiUrl" in out.settings).toBe(false);
-    expect(out.settings.schemaVersion).toBe(4);
+    expect(out.settings.schemaVersion).toBe(SCHEMA_VERSION);
   });
+});
+
+describe("v4 -> v5: GBP joins the prebaked currencies", () => {
+  const v4 = (currencies: any[], fxRates: any[] = []) => ({
+    settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 4 },
+    currencies,
+    fxRates,
+    posts: [],
+    months: [],
+    purchases: [],
+  });
+  const DKK = { code: "DKK", digits: 2, symbol: "kr", name: "Danish krone" };
+  const USD_RATE = {
+    currency: "USD",
+    baseUnitsPerOne: 6.449532,
+    updatedAt: "2026-09-01",
+    source: "manual" as const,
+  };
+
+  test("a dataset without GBP gains the definition and a rate", () => {
+    const out = migrate(v4([DKK], [USD_RATE]));
+    expect(out.settings.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(out.currencies.map((c) => c.code)).toEqual(["DKK", "GBP"]);
+    const gbp = out.fxRates.find((r) => r.currency === "GBP")!;
+    expect(gbp.baseUnitsPerOne).toBe(8.704735);
+    // "manual", never "api": Settings shows this field, and a committed
+    // constant must not claim it came from a rate service.
+    expect(gbp.source).toBe("manual");
+  });
+
+  test("a GBP the owner defined themselves is left exactly as it is", () => {
+    // Zero decimals is wrong for sterling, which is the point: it is THEIR
+    // definition, and a migration that corrected it would be editing data.
+    const mine = { code: "GBP", digits: 0, symbol: "quid" };
+    const out = migrate(v4([DKK, mine]));
+    expect(out.currencies.find((c) => c.code === "GBP")).toEqual(mine);
+  });
+
+  test("a GBP rate the owner already has keeps their number", () => {
+    const mine = {
+      currency: "GBP",
+      baseUnitsPerOne: 9,
+      updatedAt: "2026-01-01",
+      source: "manual" as const,
+    };
+    const out = migrate(v4([DKK], [mine]));
+    expect(out.fxRates.filter((r) => r.currency === "GBP")).toEqual([mine]);
+  });
+
+  test("everything else is left untouched", () => {
+    const out = migrate(v4([DKK], [USD_RATE]));
+    expect(out.fxRates.find((r) => r.currency === "USD")).toEqual(USD_RATE);
+    expect(out.currencies[0]).toEqual(DKK);
+  });
+
+  test("GBP is not added twice when the migration is somehow reapplied", () => {
+    const once = migrate(v4([DKK]));
+    const codes = once.currencies.filter((c) => c.code === "GBP");
+    expect(codes).toHaveLength(1);
+  });
+});
+
+/**
+ * A migration's output must not change when today's defaults change. The 2 -> 3
+ * step originally seeded `SEED_CURRENCIES` by reference, so adding GBP to that
+ * table would have retroactively altered what an old dataset got from a step it
+ * had already been through — silently, and only for whoever had not migrated
+ * yet. Source-level, like eventCapture.test.ts, because the damage is invisible
+ * in review and in a green suite.
+ */
+test("no migration step imports a live default that a later commit could change", async () => {
+  const source = await Bun.file("src/store/migrations.ts").text();
+  // Scoped to IMPORT BINDINGS, not to the whole file. Matching anywhere is too
+  // blunt: it flagged the comment explaining this rule, and then flagged
+  // V3_SEED_CURRENCIES, the frozen local copy that is the fix. What must never
+  // happen is the module reading a constant another commit can change.
+  const imports = [...source.matchAll(/import\s+([\s\S]*?)\s+from\s+["'][^"']+["']/g)].map(
+    (m) => m[1]!,
+  );
+  // SCHEMA_VERSION is deliberately absent: migrate() reads it as the ceiling to
+  // run to, which must track the current version. It is not a default that a
+  // step writes into someone's data.
+  const live = ["SEED_CURRENCIES", "FALLBACK_FX_RATES", "BAKED_FX_RATES"];
+  const offenders = imports.filter((binding) =>
+    live.some((name) => new RegExp(`\\b${name}\\b`).test(binding)),
+  );
+  expect(offenders).toEqual([]);
 });

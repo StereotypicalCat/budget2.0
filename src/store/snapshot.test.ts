@@ -208,7 +208,7 @@ describe("reset", () => {
       "Food",
       "Events and Social",
     ]);
-    expect(after.currencies.map((c) => c.code)).toEqual(["DKK", "USD", "EUR"]);
+    expect(after.currencies.map((c) => c.code)).toEqual(["DKK", "USD", "EUR", "GBP"]);
     expect(after.fxRates).toEqual(rates);
     expect(after.purchases).toEqual([]);
     expect(after.months).toHaveLength(1);

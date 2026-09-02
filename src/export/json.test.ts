@@ -88,8 +88,9 @@ describe("validation", () => {
 
   test("rejects an unsupported currency", () => {
     const data = populated() as any;
-    data.settings.baseCurrency = "GBP";
-    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/GBP/);
+    // CHF, not GBP: GBP is one of the currencies the app ships with now.
+    data.settings.baseCurrency = "CHF";
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/CHF/);
   });
 
   test("rejects a malformed MonthId", () => {

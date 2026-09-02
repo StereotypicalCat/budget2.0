@@ -18,7 +18,7 @@ record.
   no household mode. → [`PRODUCT.md`](PRODUCT.md)
 - **Schema migrations are mandatory, not optional.** `schemaVersion` plus
   ordered migration functions applied on load, because IndexedDB holds the
-  user's only copy of their financial data. Now at version 4.
+  user's only copy of their financial data. Now at version 5.
   → [`specs/2026-09-01-budget-app-design.md`](specs/2026-09-01-budget-app-design.md)
 - **A destructive write downloads a backup first.** Import and reset both export
   before replacing, and abort if the export fails. → commit `ac3d18a`
@@ -136,6 +136,20 @@ record.
   now" died with only a CORS error to go on. The build-time fetch never noticed,
   because a server-side fetch follows redirects freely. → commit history, and
   `src/store/fxApi.ts`
+- **A migration must never read today's defaults.** The 2 -> 3 step seeded the
+  live seed-currency table by reference, so adding sterling to that table would
+  have retroactively changed what an old dataset got from a step it had already
+  been through — silently, and only for whoever had not migrated yet. Each step
+  now carries its own frozen copy, and a source-level guard fails the build if a
+  live default is imported again. → `src/store/migrations.ts`
+- **Sterling ships with the app, and is migrated into datasets that already
+  exist.** Baked currencies and rates seed a NEW dataset and nothing else, so
+  the seed table alone would have left every existing user typing the code, name
+  symbol and decimals by hand. The 4 -> 5 step supplies the rate as well, which
+  is the one thing the "rates never backstop a cleared rate" rule permits here:
+  it forbids re-supplying a number the owner deleted, not introducing one for a
+  currency they have never had. A GBP the owner already defined is left exactly
+  as it is. → `src/store/migrations.ts`
 - **The v3 -> v4 migration DROPS the stale URL rather than rewriting it** to the
   new endpoint, so a dataset that stored it follows whatever the current default
   is and the next move of the service needs no second migration for the same

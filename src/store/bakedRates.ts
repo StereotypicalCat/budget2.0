@@ -20,9 +20,10 @@ import { SEED_CURRENCIES, type Currency, type FxRate } from "../domain/types.ts"
  *
  * Labelled "manual" rather than "api" on purpose: Settings shows this field,
  * and a hardcoded constant must not claim it came from a rate service. The
- * values are real (frankfurter.app, DKK base, 2026-09-01); EUR barely moves
- * because DKK is pegged to it, so it ages well. USD does move — a stale USD
- * number here is the reason the user can always edit or re-fetch a rate.
+ * values are real (frankfurter, DKK base, on the date each row carries); EUR
+ * barely moves because DKK is pegged to it, so it ages well. USD and GBP do
+ * move — a stale number here is the reason the user can always edit or
+ * re-fetch a rate.
  */
 export const FALLBACK_FX_RATES: readonly FxRate[] = Object.freeze([
   Object.freeze({
@@ -35,6 +36,12 @@ export const FALLBACK_FX_RATES: readonly FxRate[] = Object.freeze([
     currency: "EUR" as Currency,
     baseUnitsPerOne: 7.474959,
     updatedAt: "2026-09-01",
+    source: "manual" as const,
+  }),
+  Object.freeze({
+    currency: "GBP" as Currency,
+    baseUnitsPerOne: 8.704735,
+    updatedAt: "2026-09-02",
     source: "manual" as const,
   }),
 ]);

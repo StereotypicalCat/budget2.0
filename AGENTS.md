@@ -104,6 +104,13 @@ ship twice — re-introducing one is a regression, not a style choice.
   worker's precache list (`src/swPrecache.test.ts`) — which must contain no
   duplicate, because `cache.addAll` rejects on one, which is why the service
   worker had never once installed in any environment.
+- **A migration step must not import a live default** — no seed table, no baked
+  rates. Each step carries its own frozen copy of whatever it writes, because a
+  step's output must not change when today's defaults do: it would silently
+  rewrite what an old dataset receives, and only for whoever had not migrated
+  yet. → `src/store/migrations.test.ts`, scoped to import bindings (matching the
+  whole file flagged both the comment explaining the rule and the frozen local
+  copy that is the fix).
 - **Every repository path named in a navigable document must be git-TRACKED** —
   this file, `README.md`, and `docs/*.md`. → `src/docsLinks.test.ts`, added when
   the docs moved into `docs/`: a restructure that quietly leaves thirty

@@ -13,7 +13,7 @@ const outdir = path.join(process.cwd(), "dist");
 const version = process.env.BUILD_VERSION ?? String(Date.now());
 
 const FX_BASE: Currency = "DKK";
-const FX_TARGETS: Currency[] = ["USD", "EUR"];
+const FX_TARGETS: Currency[] = ["USD", "EUR", "GBP"];
 const FX_TIMEOUT_MS = 8_000;
 
 /**

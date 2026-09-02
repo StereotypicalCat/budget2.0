@@ -1,7 +1,7 @@
 import { SEED_CURRENCIES } from "./types.ts";
 import type { CurrencyDef, Dataset, FxRate, MonthId, Post } from "./types.ts";
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 const SEED_POST_NAMES = ["Video Games", "Food", "Events and Social"] as const;
 

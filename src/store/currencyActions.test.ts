@@ -63,7 +63,7 @@ describe("removing a currency", () => {
     const data = draft();
     actions.addCurrency(data, { code: "JPY", digits: 0 });
     actions.removeCurrency(data, "JPY");
-    expect(data.currencies.map((c) => c.code)).toEqual(["DKK", "USD", "EUR"]);
+    expect(data.currencies.map((c) => c.code)).toEqual(["DKK", "USD", "EUR", "GBP"]);
   });
 
   test("its exchange rate goes with it, so no orphan row is left behind", () => {
