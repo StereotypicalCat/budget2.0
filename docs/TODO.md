@@ -91,12 +91,15 @@ Tasks 3-6 of the versioned-allocation-rules work — `setRuleFrom` /
 and the month view's "change from here" — were executed by hand rather than
 dispatched, and no second pair of eyes has been over the diff.
 
-Worth reading first: the task log in
-`.superpowers/sdd/2026-09-02-versioned-allocation-rules/` records every deviation
-from the original briefs with its reasoning. Four of them fixed real defects in
-the brief code — JSX that would not compile, a component that pre-filled the
-previous post's rule, a number field that could not be cleared, and missing
-validation that let a NaN allocation into the fold.
+Worth reading first: the four commit messages, `de128e3`, `1cb91d3`, `e3023d0`
+and `f94e458`. They record why each surface works the way it does, including
+three of the four places the original briefs were wrong — a number field that
+could not be cleared, a component that kept the previous post's rule because it
+was not keyed, and missing validation that let a NaN allocation into the fold.
+
+(The fuller task log lived in a tool-managed ledger under `.superpowers/`, which
+ignores its own contents and was never part of the repository. This file used to
+send readers there, which worked only on the machine that wrote it.)
 
 Both surfaces have since been seen working in a browser. What is missing is
 review, not verification.
