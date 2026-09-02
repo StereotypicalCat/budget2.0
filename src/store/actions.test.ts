@@ -302,3 +302,79 @@ describe("settings", () => {
     expect(data.fxRates).toEqual([]);
   });
 });
+
+describe("rule versions", () => {
+  const pct = (percent: number) => ({ kind: "percentOfIncome" as const, percent });
+
+  test("setRuleFrom adds a version to a post that had none", () => {
+    const data = draft();
+    const postId = data.posts[0]!.id;
+    actions.setRuleFrom(data, postId, "2026-04", pct(10));
+    expect(data.posts[0]!.rules).toEqual([{ from: "2026-04", rule: pct(10) }]);
+  });
+
+  test("setRuleFrom REPLACES an existing version for the same month", () => {
+    const data = draft();
+    const postId = data.posts[0]!.id;
+    actions.setRuleFrom(data, postId, "2026-04", pct(10));
+    actions.setRuleFrom(data, postId, "2026-04", pct(15));
+    expect(data.posts[0]!.rules).toHaveLength(1);
+    expect(data.posts[0]!.rules[0]!.rule).toEqual(pct(15));
+  });
+
+  test("versions are kept sorted regardless of insertion order", () => {
+    const data = draft();
+    const postId = data.posts[0]!.id;
+    actions.setRuleFrom(data, postId, "2026-07", pct(15));
+    actions.setRuleFrom(data, postId, "2026-04", pct(10));
+    actions.setRuleFrom(data, postId, "2026-05", pct(12));
+    expect(data.posts[0]!.rules.map((v) => v.from)).toEqual([
+      "2026-04",
+      "2026-05",
+      "2026-07",
+    ]);
+  });
+
+  test("a fixed rule is rounded at the mutation boundary", () => {
+    const data = draft();
+    const postId = data.posts[0]!.id;
+    actions.setRuleFrom(data, postId, "2026-04", {
+      kind: "fixed",
+      amount: { amount: 12.345, currency: "DKK" },
+    });
+    const stored = data.posts[0]!.rules[0]!.rule;
+    expect(stored.kind === "fixed" && stored.amount.amount).toBe(12.35);
+  });
+
+  test("a percentage above 100 is stored, not clamped", () => {
+    const data = draft();
+    actions.setRuleFrom(data, data.posts[0]!.id, "2026-04", pct(150));
+    expect(data.posts[0]!.rules[0]!.rule).toEqual(pct(150));
+  });
+
+  test("removeRuleFrom deletes exactly that version", () => {
+    const data = draft();
+    const postId = data.posts[0]!.id;
+    actions.setRuleFrom(data, postId, "2026-04", pct(10));
+    actions.setRuleFrom(data, postId, "2026-07", pct(15));
+    actions.removeRuleFrom(data, postId, "2026-04");
+    expect(data.posts[0]!.rules).toEqual([{ from: "2026-07", rule: pct(15) }]);
+  });
+
+  test("removing a month that has no version is a no-op, not an error", () => {
+    const data = draft();
+    const postId = data.posts[0]!.id;
+    actions.setRuleFrom(data, postId, "2026-04", pct(10));
+    actions.removeRuleFrom(data, postId, "2026-09");
+    expect(data.posts[0]!.rules).toHaveLength(1);
+  });
+
+  test("both throw on an unknown post id", () => {
+    expect(() => actions.setRuleFrom(draft(), "ghost", "2026-04", pct(10))).toThrow(
+      /Unknown post: ghost/,
+    );
+    expect(() => actions.removeRuleFrom(draft(), "ghost", "2026-04")).toThrow(
+      /Unknown post: ghost/,
+    );
+  });
+});

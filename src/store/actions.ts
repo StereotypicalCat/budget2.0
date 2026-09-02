@@ -1,5 +1,5 @@
 import { newId } from "../domain/seed.ts";
-import { monthOf } from "../domain/months.ts";
+import { compareMonths, monthOf } from "../domain/months.ts";
 import { roundMoney } from "../domain/money.ts";
 import type {
   Currency,
@@ -13,6 +13,7 @@ import type {
   Purchase,
   PurchaseId,
   Rule,
+  RuleVersion,
   Schedule,
   Split,
 } from "../domain/types.ts";
@@ -142,6 +143,35 @@ export function movePost(draft: Dataset, postId: PostId, direction: -1 | 1): voi
   const a = ordered[index]!;
   const b = ordered[target]!;
   [a.order, b.order] = [b.order, a.order];
+}
+
+/**
+ * Inserts or replaces the version starting at `from`, keeping `rules` sorted.
+ * Replacing rather than appending is what keeps the effective rule
+ * unambiguous: two versions sharing a month would both be "in effect", and
+ * ruleAt would resolve to whichever the sort happened to leave last.
+ */
+export function setRuleFrom(
+  draft: Dataset,
+  postId: PostId,
+  from: MonthId,
+  rule: Rule,
+): void {
+  const post = requirePost(draft, postId);
+  const version: RuleVersion = { from, rule: roundRule(rule) };
+  const existing = post.rules.findIndex((v) => v.from === from);
+  if (existing === -1) post.rules.push(version);
+  else post.rules[existing] = version;
+  post.rules.sort((a, b) => compareMonths(a.from, b.from));
+}
+
+/**
+ * Deletes the version starting at `from`. Removing the earliest one means the
+ * months before the next version now resolve to no rule, and allocate zero.
+ */
+export function removeRuleFrom(draft: Dataset, postId: PostId, from: MonthId): void {
+  const post = requirePost(draft, postId);
+  post.rules = post.rules.filter((v) => v.from !== from);
 }
 
 export function addPurchase(
