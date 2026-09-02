@@ -8,9 +8,9 @@ decisions behind it are in `docs/specs/` — one spec per sub-project,
 each recording the alternatives that were rejected. Rules that outlived their
 task moved to `AGENTS.md`.
 
-**Current state:** 443 tests passing, `bunx tsc --noEmit` clean, `bun run build`
-succeeds on both the live-fetch and offline paths. The month view redesign and
-the reset button are on branch `month-view-and-reset`, not yet merged to `main`.
+**Current state:** merged to `main`, not yet pushed. 446 tests passing,
+`bunx tsc --noEmit` clean, `bun run build` succeeds on both the live-fetch and
+offline paths.
 
 **Schema is at version 3.** v1 -> v2 made allocation rules a dated series;
 v2 -> v3 moved currencies into the dataset. Both migrations are
