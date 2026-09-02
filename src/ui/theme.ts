@@ -67,4 +67,29 @@ export function resolveTheme(
  */
 export function applyResolvedTheme(theme: ResolvedTheme): void {
   document.documentElement.classList.toggle("dark", theme === "dark");
+  applyColorScheme(theme);
+}
+
+/**
+ * States the live scheme in `<meta name="color-scheme">`, kept in step with the
+ * `color-scheme` declarations in index.css.
+ *
+ * The meta tag rather than the stylesheet alone, because of Dark Reader: it
+ * reads this tag first, and failing to find one it samples text and background
+ * colours off the painted page and applies its own inversion. On our dark
+ * palette that is a second darkening of an already dark app. Declaring "dark"
+ * is what tells it the app is already there.
+ *
+ * index.html ships the tag and the pre-paint script sets it, so this is
+ * normally an update; it creates the tag if it is missing rather than silently
+ * doing nothing, which would leave Dark Reader guessing again.
+ */
+function applyColorScheme(theme: ResolvedTheme): void {
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]');
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.name = "color-scheme";
+    document.head.appendChild(meta);
+  }
+  meta.content = theme;
 }

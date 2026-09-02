@@ -96,8 +96,13 @@ ship twice — re-introducing one is a regression, not a style choice.
   reference elsewhere, so this one still needs your attention.
 - **The pre-paint theme script in `index.html` and `src/ui/theme.ts` must
   agree.** The script cannot import the module — it has to run before any module
-  loads — so it repeats the storage key and the fallback logic.
-  → `src/ui/theme.test.ts`
+  loads — so it repeats the storage key and the fallback logic. Both set two
+  things, not one: the `.dark` class and `<meta name="color-scheme">`, which
+  must also match the `color-scheme` declarations in `src/index.css`. The meta
+  tag is what Dark Reader reads to decide the app already has a dark theme;
+  without it, it samples the painted colours and inverts our dark palette a
+  second time. → `src/ui/theme.test.ts`, which runs the real script out of the
+  HTML rather than matching its text.
 - **Anything derived from the base path is asserted for both a root and a
   subpath deploy:** the manifest (`src/manifest.test.ts`), the font URLs
   (`src/fontCss.test.ts`), the icons (`src/icons.test.ts`), and the service

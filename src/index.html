@@ -11,6 +11,12 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#0f172a" />
+    <!-- The live scheme, stated before any script runs. The pre-paint script
+         below narrows it to the one actually in use; src/ui/theme.ts keeps it
+         in step from then on. Dark Reader reads this tag to decide whether the
+         page already has a dark theme, and inverts our own dark palette a
+         second time when it finds nothing. -->
+    <meta name="color-scheme" content="light dark" />
     <!--
       Applies the saved theme BEFORE the stylesheet paints, so a dark-theme
       user never sees a flash of the light palette. It cannot import
@@ -19,14 +25,21 @@
       Wrapped because localStorage throws outright in some configurations.
     -->
     <script>
+      var dark = false;
       try {
         var saved = localStorage.getItem("budget2:theme");
-        var dark =
+        dark =
           saved === "dark" ||
           ((saved === null || saved === "system") &&
             window.matchMedia("(prefers-color-scheme: dark)").matches);
-        if (dark) document.documentElement.classList.add("dark");
       } catch (e) {}
+      if (dark) document.documentElement.classList.add("dark");
+      var scheme = document.querySelector('meta[name="color-scheme"]');
+      if (!scheme) {
+        scheme = document.head.appendChild(document.createElement("meta"));
+        scheme.name = "color-scheme";
+      }
+      scheme.content = dark ? "dark" : "light";
     </script>
     <script type="module" src="./frontend.tsx" async></script>
   </head>
