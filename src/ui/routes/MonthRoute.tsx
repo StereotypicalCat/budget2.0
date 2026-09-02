@@ -9,12 +9,13 @@ import { monthView } from "../../domain/views.ts";
 import { addMonths } from "../../domain/months.ts";
 import { setIncome, deletePurchase, setRuleFrom } from "../../store/actions.ts";
 import { ruleAt } from "../../domain/allocation.ts";
-import type { MonthId, Post, Rule } from "../../domain/types.ts";
+import type { MonthId, Post, Purchase, Rule } from "../../domain/types.ts";
 import { sliceAmountForMonth } from "../../domain/charges.ts";
 import { formatMoney, formatSignedMoney } from "../format.ts";
 import { PostTable } from "../components/PostTable.tsx";
 import { PurchaseDialog } from "../components/PurchaseDialog.tsx";
 import { Section, Stat } from "../components/Section.tsx";
+import { groupPurchasesByDate } from "../purchaseGroups.ts";
 
 export function MonthRoute() {
   const { monthId = "" } = useParams();
@@ -23,6 +24,10 @@ export function MonthRoute() {
   const view = monthView(dataset, monthId);
   const base = dataset.settings.baseCurrency;
   const [changingRuleFor, setChangingRuleFor] = useState<string | null>(null);
+  const monthPurchases = dataset.purchases.filter(
+    (purchase) => sliceAmountForMonth(purchase, monthId) !== null,
+  );
+  const groups = groupPurchasesByDate(monthPurchases, monthId);
   const changingPost = changingRuleFor
     ? (dataset.posts.find((p) => p.id === changingRuleFor) ?? null)
     : null;
@@ -113,57 +118,86 @@ export function MonthRoute() {
         title="Purchases"
         action={<PurchaseDialog monthId={monthId} trigger={<Button>Add purchase</Button>} />}
       >
-        <ul className="divide-y divide-budget-rule text-sm">
-          {dataset.purchases
-            .filter((purchase) => sliceAmountForMonth(purchase, monthId) !== null)
-            .map((purchase) => {
-              const slice = sliceAmountForMonth(purchase, monthId)!;
-              return (
-                <li
-                  key={purchase.id}
-                  className="group flex items-center gap-3 rounded-md px-1 py-1.5 transition-colors hover:bg-accent/60"
-                >
-                  <span className="min-w-0 flex-1 truncate">
-                    {purchase.description}
-                    {purchase.note && (
-                      <span className="ml-2 text-xs text-budget-ink-muted">{purchase.note}</span>
-                    )}
-                  </span>
-                  {purchase.schedule && (
-                    <span className="rounded-full border border-budget-rule px-1.5 py-px text-[0.625rem] uppercase tracking-wide text-budget-ink-muted">
-                      financed
-                    </span>
-                  )}
-                  <span className="font-money shrink-0 tabular-nums">
-                    {formatMoney(slice.amount, slice.currency)}
-                  </span>
-                  {/* Held at a fixed width so revealing them on hover cannot
-                      shift the amounts, which are the column being read. */}
-                  <span className="flex w-[7.5rem] shrink-0 justify-end gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-                    <PurchaseDialog
-                      monthId={monthId}
+        {groups.length === 0 ? (
+          <p className="py-1 text-sm text-budget-ink-muted">
+            Nothing recorded for this month yet.
+          </p>
+        ) : (
+          <div className="space-y-3.5">
+            {groups.map((group) => (
+              <div key={group.key}>
+                <h3 className="mb-0.5 text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted">
+                  {group.label}
+                </h3>
+                <ul className="divide-y divide-budget-rule text-sm">
+                  {group.purchases.map((purchase) => (
+                    <PurchaseRow
+                      key={purchase.id}
                       purchase={purchase}
-                      trigger={
-                        <Button size="sm" variant="ghost">
-                          edit
-                        </Button>
+                      monthId={monthId}
+                      onDelete={() =>
+                        mutate((data) => deletePurchase(data, purchase.id))
                       }
                     />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-overspend hover:text-overspend"
-                      onClick={() => mutate((data) => deletePurchase(data, purchase.id))}
-                    >
-                      delete
-                    </Button>
-                  </span>
-                </li>
-              );
-            })}
-        </ul>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </Section>
     </div>
+  );
+}
+
+function PurchaseRow({
+  purchase,
+  monthId,
+  onDelete,
+}: {
+  purchase: Purchase;
+  monthId: MonthId;
+  onDelete: () => void;
+}) {
+  const slice = sliceAmountForMonth(purchase, monthId)!;
+  return (
+    <li className="group flex items-center gap-3 rounded-md px-1 py-1.5 transition-colors hover:bg-accent/60">
+      <span className="min-w-0 flex-1 truncate">
+        {purchase.description}
+        {purchase.note && (
+          <span className="ml-2 text-xs text-budget-ink-muted">{purchase.note}</span>
+        )}
+      </span>
+      {purchase.schedule && (
+        <span className="shrink-0 rounded-full border border-budget-rule px-1.5 py-px text-[0.625rem] uppercase tracking-wide text-budget-ink-muted">
+          financed
+        </span>
+      )}
+      <span className="font-money shrink-0 tabular-nums">
+        {formatMoney(slice.amount, slice.currency)}
+      </span>
+      {/* Held at a fixed width so revealing the actions on hover cannot shift
+          the amounts, which are the column being read down. */}
+      <span className="flex w-[7.5rem] shrink-0 justify-end gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <PurchaseDialog
+          monthId={monthId}
+          purchase={purchase}
+          trigger={
+            <Button size="sm" variant="ghost">
+              edit
+            </Button>
+          }
+        />
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-overspend hover:text-overspend"
+          onClick={onDelete}
+        >
+          delete
+        </Button>
+      </span>
+    </li>
   );
 }
 
