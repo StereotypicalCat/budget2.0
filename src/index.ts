@@ -21,6 +21,14 @@ const server = serve({
       new Response(Bun.file(new URL("./icon.svg", import.meta.url)), {
         headers: { "content-type": "image/svg+xml" },
       }),
+    [`${basePath}icon-192.png`]: () =>
+      new Response(Bun.file(new URL("./icon-192.png", import.meta.url)), {
+        headers: { "content-type": "image/png" },
+      }),
+    [`${basePath}icon-512.png`]: () =>
+      new Response(Bun.file(new URL("./icon-512.png", import.meta.url)), {
+        headers: { "content-type": "image/png" },
+      }),
     "/*": index,
   },
   development: process.env.NODE_ENV !== "production" && {

@@ -52,11 +52,27 @@ if (!result.success) {
   throw new Error("Build failed");
 }
 
+/**
+ * Written to dist below rather than emitted by the bundler, so they are absent
+ * from `result.outputs` and have to be listed for the precache by name.
+ * Without them an installed app cannot render its own icon offline, and the
+ * manifest 404s.
+ */
+const STATIC_ASSETS = [
+  "manifest.webmanifest",
+  "icon.svg",
+  "icon-192.png",
+  "icon-512.png",
+];
+
 // The precache list comes from the build's own outputs, so hashed filenames can
 // never drift out of sync with the service worker.
-const precache = result.outputs
-  .filter((output) => !output.path.endsWith(".map"))
-  .map((output) => basePath + path.relative(outdir, output.path).replaceAll(path.sep, "/"));
+const precache = [
+  ...result.outputs
+    .filter((output) => !output.path.endsWith(".map"))
+    .map((output) => basePath + path.relative(outdir, output.path).replaceAll(path.sep, "/")),
+  ...STATIC_ASSETS.map((file) => basePath + file),
+];
 
 const swResult = await Bun.build({
   entrypoints: ["src/sw.ts"],
@@ -78,6 +94,12 @@ if (!swResult.success) {
 
 await Bun.write(path.join(outdir, "manifest.webmanifest"), buildManifest(basePath));
 await Bun.write(path.join(outdir, "icon.svg"), Bun.file("src/icon.svg"));
+for (const size of [192, 512]) {
+  await Bun.write(
+    path.join(outdir, `icon-${size}.png`),
+    Bun.file(`src/icon-${size}.png`),
+  );
+}
 
 // This is an SPA: every route serves the same shell, so the *document* URL
 // can be several segments deep (e.g. /budget2.0/month/2026-09). Relative

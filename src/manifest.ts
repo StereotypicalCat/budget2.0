@@ -16,7 +16,13 @@ export function buildManifest(base: string): string {
       display: "standalone",
       background_color: "#0f172a",
       theme_color: "#0f172a",
-      icons: [{ src: `${base}icon.svg`, sizes: "any", type: "image/svg+xml" }],
+      // The SVG first for anything that will scale it; the raster sizes
+      // because Chrome's install prompt wants 192 and 512 specifically.
+      icons: [
+        { src: `${base}icon.svg`, sizes: "any", type: "image/svg+xml" },
+        { src: `${base}icon-192.png`, sizes: "192x192", type: "image/png" },
+        { src: `${base}icon-512.png`, sizes: "512x512", type: "image/png" },
+      ],
     },
     null,
     2,
