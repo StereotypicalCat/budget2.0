@@ -16,7 +16,27 @@ export class UnsupportedSchemaError extends Error {
  * because users' stored data has already been through it.
  */
 const MIGRATIONS: Array<(data: any) => any> = [
-  // index 0: there is no version 0 in the wild yet.
+  // index 0: there is no version 0 in the wild.
+  undefined as unknown as (data: any) => any,
+
+  // 1 -> 2: a post's single `standingRule` becomes a one-entry dated series,
+  // effective from the fold start. Behaviour-preserving by construction: the
+  // standing rule already applied from the fold start onward, so every month
+  // resolves to exactly the allocation it did before.
+  (data: any) => ({
+    ...data,
+    settings: { ...data.settings, schemaVersion: 2 },
+    posts: (data.posts ?? []).map((post: any) => {
+      const { standingRule, ...rest } = post;
+      return {
+        ...rest,
+        rules:
+          standingRule === undefined
+            ? []
+            : [{ from: data.settings.foldStartMonth, rule: standingRule }],
+      };
+    }),
+  }),
 ];
 
 export function migrate(raw: unknown): Dataset {
