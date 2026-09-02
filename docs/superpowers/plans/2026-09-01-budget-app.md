@@ -1,3 +1,10 @@
+> **Historical record, not current truth.** This plan was executed and is kept
+> for its reasoning. Two things in it have since changed and the code is the
+> authority: allocation rules are a dated series (`Post.rules`, schema v2), and
+> currencies live in `Dataset.currencies` with `roundMoney` taking a digit
+> count rather than a currency code (schema v3). Snippets below still show
+> `CURRENCIES` / `CURRENCY_DIGITS`, which no longer exist.
+
 # Budget 2.0 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

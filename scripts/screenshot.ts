@@ -30,6 +30,19 @@ const width = Number(flag("w", "1280"));
 const height = Number(flag("h", "900"));
 const waitMs = Number(flag("wait", "1500"));
 
+/**
+ * This container's fontconfig resolves EVERY generic family — sans-serif,
+ * system-ui, monospace — to Fira Code, a monospace font. Screenshots then show
+ * the whole UI monospaced in a way no real user sees, and the last agent to
+ * look nearly "fixed" a font bug that did not exist. Applied automatically so
+ * nobody has to know that; set FONTCONFIG_FILE yourself to override.
+ */
+const fontConfig = new URL("./screenshot-fonts.conf", import.meta.url).pathname;
+const fontEnv =
+  process.env.FONTCONFIG_FILE || !(await Bun.file(fontConfig).exists())
+    ? {}
+    : { FONTCONFIG_FILE: fontConfig };
+
 const chrome = Bun.spawn(
   [
     process.env.CHROME ?? "google-chrome",
@@ -49,7 +62,7 @@ const chrome = Bun.spawn(
     ...(has("dark") ? ["--force-dark-mode", "--enable-features=WebContentsForceDark"] : []),
     "about:blank",
   ],
-  { stdout: "ignore", stderr: "pipe" },
+  { stdout: "ignore", stderr: "pipe", env: { ...process.env, ...fontEnv } },
 );
 
 /** Chrome announces its debugging endpoint on stderr, once, at startup. */

@@ -192,20 +192,36 @@ Adding a "missing" guard here is a regression:
 ## Verification limits
 
 **There IS a browser here.** `google-chrome` is on PATH, and
-`bun scripts/screenshot.ts <url> <out.png>` drives it over CDP: it waits past
-the async IndexedDB read (which plain `--screenshot` does not), can seed data
-with `--eval-file`, click with `--click`, and reports console errors and
-uncaught exceptions. Read the PNG it writes — you can see the app. Use it
-before claiming anything about layout.
+`scripts/screenshot.ts` drives it over CDP — it waits past the async IndexedDB
+read (which Chrome's own `--screenshot` does not, which is why the docs used to
+claim no browser existed), and it reports console errors and uncaught
+exceptions. Read the PNG it writes. Use it before claiming anything about
+layout.
 
-Two things to know before trusting a screenshot:
+The whole recipe, from a running `bun run dev`:
 
+```sh
+bun scripts/demo-data.ts /tmp/seed.js
+bun scripts/screenshot.ts http://localhost:3000/month/2026-09 /tmp/shot.png \
+  --eval-file=/tmp/seed.js --reload
+```
+
+Then read `/tmp/shot.png`. Other flags: `--dark`, `--full`, `--w/--h`,
+`--click=<selector>`, `--profile=<dir>` (keeps a service worker and IndexedDB
+across runs — required for anything stateful), `--eval-after-file` (observe a
+flow that ends in a navigation from the far side of it).
+
+Two things that would otherwise waste your time:
+
+- **`--reload` is not optional.** Chrome starts from a fresh profile each run,
+  so the app re-seeds itself empty; seeding IndexedDB only takes effect on the
+  next boot. Without it every screenshot shows an app full of zeros.
 - **This container's fontconfig resolves every generic family to Fira Code, a
-  monospace font**, so the whole UI renders monospaced in a way no real user
-  sees. Point `FONTCONFIG_FILE` at an override that maps the generics to
-  installed sans/mono faces, or you will "fix" a font bug that does not exist.
-- Chrome launches with a fresh profile each run, so IndexedDB starts empty and
-  the app re-seeds. Pass `--eval-file=<seed.js> --reload` for populated data.
+  monospace font.** The UI then renders monospaced in a way no real user sees,
+  and the last agent to look nearly "fixed" a font bug that did not exist.
+  `scripts/screenshot-fonts.conf` corrects it and the script applies it
+  automatically — do not undo that, and do not trust a screenshot taken with
+  `FONTCONFIG_FILE` set to something else.
 
 Still **not** verifiable here, so do not claim it: real offline behaviour, the
 install and update prompts, opening the generated `.ods` in a spreadsheet, and
