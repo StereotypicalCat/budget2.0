@@ -1,30 +1,13 @@
-import {
-  DEFAULT_CURRENCY_DIGITS,
-  type Currency,
-  type CurrencyDef,
-  type Dataset,
-} from "./types.ts";
+import { type Currency, type CurrencyDef, type Dataset } from "./types.ts";
 
-/**
- * How many decimals a currency rounds to.
- *
- * Digits used to be a module-level constant table, which made "add a
- * currency" a code change. They now live in the dataset, so every rounding
- * site has to be told which digits to use — that threading is deliberate, and
- * the reason `roundMoney` takes a number rather than a code.
- *
- * An undefined currency falls back to two places rather than throwing. A
- * missing definition is a data problem the import validator rejects at the
- * boundary; deep inside the fold, two decimals is right for almost every
- * currency and a throw would take the whole balance view down.
+/*
+ * `digitsFor(currencies, code)` used to live here. Decimal places are now one
+ * setting for the whole dataset, `settings.digits`, so there is nothing to
+ * resolve a code against: rounding sites read that field directly, and domain
+ * functions that once took the currency table purely to look digits up take a
+ * `digits: number` instead. A function still accepting a code it ignored would
+ * only invite call sites to believe the code still mattered.
  */
-export function digitsFor(
-  currencies: readonly CurrencyDef[],
-  code: Currency,
-): number {
-  const found = currencies.find((currency) => currency.code === code);
-  return found ? found.digits : DEFAULT_CURRENCY_DIGITS;
-}
 
 /** The codes, in the order the owner arranged them. */
 export function currencyCodes(currencies: readonly CurrencyDef[]): Currency[] {

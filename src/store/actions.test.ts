@@ -4,27 +4,25 @@ import { createSeedDataset } from "../domain/seed.ts";
 import type { Dataset } from "../domain/types.ts";
 
 /**
- * Digits now live in the dataset, so a currency with a different minor unit is
- * expressed by DEFINING one — no monkey-patching a module constant, which is
- * what this file used to need.
+ * Decimal places are one dataset-wide setting, so a different minor unit is
+ * expressed by moving `settings.digits` — no monkey-patching a module
+ * constant, which is what this file used to need, and no per-currency entry
+ * either, which is what it needed before that.
  */
-function withDigits(currency: string, digits: number, body: () => void) {
-  const original = zeroDigitDataset;
-  zeroDigitDataset = { currency, digits };
+function withDigits(digits: number, body: () => void) {
+  const original = overriddenDigits;
+  overriddenDigits = digits;
   try {
     body();
   } finally {
-    zeroDigitDataset = original;
+    overriddenDigits = original;
   }
 }
-let zeroDigitDataset: { currency: string; digits: number } | null = null;
+let overriddenDigits: number | null = null;
 
 function draft(): Dataset {
   const data = createSeedDataset("2026-09");
-  if (zeroDigitDataset) {
-    const target = data.currencies.find((c) => c.code === zeroDigitDataset!.currency);
-    if (target) target.digits = zeroDigitDataset.digits;
-  }
+  if (overriddenDigits !== null) data.settings.digits = overriddenDigits;
   return data;
 }
 
@@ -48,7 +46,7 @@ describe("months", () => {
     expect(data.months.find((m) => m.id === "2026-11")!.income.amount).toBe(25000);
   });
 
-  test("setIncome rounds the amount to the currency's minor unit", () => {
+  test("setIncome rounds the amount to the dataset's decimal places", () => {
     const data = draft();
     actions.setIncome(data, "2026-11", { amount: 25000.005, currency: "DKK" });
     expect(data.months.find((m) => m.id === "2026-11")!.income.amount).toBe(25000.01);
@@ -401,11 +399,11 @@ describe("rule versions", () => {
 });
 
 describe("split values are rounded by what they MEAN", () => {
-  // In "fixed" mode a split value is money in the purchase's currency, so it
-  // must round to that currency's minor unit. In "percent" mode it is a
-  // percentage and has nothing to do with any currency.
-  test("a fixed-mode split rounds to the purchase currency's minor unit", () => {
-    withDigits("EUR", 0, () => {
+  // In "fixed" mode a split value is money, so it must round to the dataset's
+  // decimal places. In "percent" mode it is a percentage and has nothing to do
+  // with money at all, so it stays at two places whatever the setting says.
+  test("a fixed-mode split rounds to the dataset's decimal places", () => {
+    withDigits(0, () => {
       const data = draft();
       const purchase = actions.addPurchase(data, {
         date: "2026-09-14",
@@ -422,8 +420,8 @@ describe("split values are rounded by what they MEAN", () => {
     });
   });
 
-  test("a fixed-mode split still rounds by currency when only splits change", () => {
-    withDigits("EUR", 0, () => {
+  test("a fixed-mode split still rounds to the setting when only splits change", () => {
+    withDigits(0, () => {
       const data = draft();
       const purchase = actions.addPurchase(data, {
         date: "2026-09-14",
@@ -441,7 +439,7 @@ describe("split values are rounded by what they MEAN", () => {
   });
 
   test("a percent-mode split keeps 2 decimals whatever the currency does", () => {
-    withDigits("EUR", 0, () => {
+    withDigits(0, () => {
       const data = draft();
       const purchase = actions.addPurchase(data, {
         date: "2026-09-14",

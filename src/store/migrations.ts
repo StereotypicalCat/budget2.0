@@ -18,6 +18,13 @@ const V3_SEED_CURRENCIES = [
   { code: "EUR", digits: 2, symbol: "\u20ac", name: "Euro" },
 ];
 
+/**
+ * What 5 -> 6 falls back to when a dataset carries no usable per-currency
+ * digits. Frozen for the same reason as the tables above: a step's output must
+ * not move when today's defaults do.
+ */
+const V6_FALLBACK_DIGITS = 2;
+
 /** Sterling as 4 -> 5 adds it. Frozen for the same reason as the list above. */
 const V5_GBP = { code: "GBP", digits: 2, symbol: "\u00a3", name: "British pound" };
 const V5_GBP_RATE = {
@@ -133,6 +140,38 @@ const MIGRATIONS: Array<(data: any) => any> = [
       settings: { ...data.settings, schemaVersion: 5 },
       currencies: hasGbp ? currencies : [...currencies, { ...V5_GBP }],
       fxRates: hasGbpRate || hasGbp ? fxRates : [...fxRates, { ...V5_GBP_RATE }],
+    };
+  },
+
+  // 5 -> 6: decimal places stop being per-currency and become one setting for
+  // the whole dataset. See docs/specs/2026-09-02-global-decimals-design.md,
+  // which records what that gives up: a dataset mixing minor units — yen at 0
+  // beside kroner at 2 — can no longer be described.
+  //
+  // The setting takes the MAXIMUM of what the currencies declared, not the base
+  // currency's value. A dataset holding a three-decimal currency already has
+  // three-decimal amounts stored in it, and adopting the base's 2 would mean
+  // the next edit of one silently truncated it. The maximum can only ever keep
+  // more precision than before, never less.
+  //
+  // Behaviour-preserving on every dataset this app has written: all four seeded
+  // currencies record 2, so the maximum is 2 and not one stored amount rounds
+  // differently than it did before.
+  (data: any) => {
+    const currencies = Array.isArray(data.currencies) ? data.currencies : [];
+    const declared = currencies
+      .map((currency: any) => currency?.digits)
+      .filter((digits: unknown): digits is number => Number.isInteger(digits));
+    return {
+      ...data,
+      settings: {
+        ...data.settings,
+        schemaVersion: 6,
+        digits: declared.length > 0 ? Math.max(...declared) : V6_FALLBACK_DIGITS,
+      },
+      // `digits` dropped from each entry; everything else about a definition
+      // the owner wrote is theirs and survives untouched.
+      currencies: currencies.map(({ digits, ...rest }: any) => rest),
     };
   },
 ];

@@ -75,7 +75,7 @@ describe("what baked rates are allowed to do", () => {
         { amount: 100, currency: "EUR" },
         data.settings.baseCurrency,
         data.fxRates,
-        data.currencies,
+        data.settings.digits,
       ),
     ).toThrow(MissingRateError);
   });

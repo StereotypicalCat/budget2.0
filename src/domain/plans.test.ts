@@ -2,8 +2,8 @@ import { test, expect } from "bun:test";
 import { equalSlices, sliceTotal, slicesBalance } from "./plans.ts";
 
 /**
- * Digits are passed in rather than looked up from a table, so a currency
- * with a different minor unit is expressed directly instead of by
+ * Digits are passed in rather than looked up, so a dataset rounding to a
+ * different number of places is expressed directly instead of by
  * monkey-patching a constant, which is what this file used to have to do.
  */
 const DKK = 2;

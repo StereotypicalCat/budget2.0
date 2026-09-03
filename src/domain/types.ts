@@ -9,11 +9,15 @@
  */
 export type Currency = string;
 
-/** What the owner has told the app about one currency. */
+/**
+ * What the owner has told the app about one currency.
+ *
+ * Decimal places are NOT here. They are one setting for the whole dataset,
+ * `Settings.digits`, applied to every currency alike — see
+ * docs/specs/2026-09-02-global-decimals-design.md, including what that costs.
+ */
 export interface CurrencyDef {
   code: Currency;
-  /** Decimal places in its minor unit: 2 for DKK, 0 for JPY, 3 for KWD. */
-  digits: number;
   /** "kr", "$", "€". Optional — a currency can be typed by code alone. */
   symbol?: string;
   /** "Danish krone". Shown in Settings; never used for identity. */
@@ -25,14 +29,14 @@ export interface CurrencyDef {
  * currencies — that lives in the dataset, because the owner can add more.
  */
 export const SEED_CURRENCIES: readonly CurrencyDef[] = [
-  { code: "DKK", digits: 2, symbol: "kr", name: "Danish krone" },
-  { code: "USD", digits: 2, symbol: "$", name: "US dollar" },
-  { code: "EUR", digits: 2, symbol: "\u20ac", name: "Euro" },
-  { code: "GBP", digits: 2, symbol: "\u00a3", name: "British pound" },
+  { code: "DKK", symbol: "kr", name: "Danish krone" },
+  { code: "USD", symbol: "$", name: "US dollar" },
+  { code: "EUR", symbol: "\u20ac", name: "Euro" },
+  { code: "GBP", symbol: "\u00a3", name: "British pound" },
 ];
 
-/** Used when a currency has no definition. Two places is right almost always. */
-export const DEFAULT_CURRENCY_DIGITS = 2;
+/** What a brand-new dataset rounds to. Right for every currency it ships with. */
+export const DEFAULT_DIGITS = 2;
 
 /** A float amount paired with its currency. See AGENTS.md for rounding rules. */
 export interface Money {
@@ -127,6 +131,14 @@ export interface Settings {
   baseCurrency: Currency;
   foldStartMonth: MonthId;
   schemaVersion: number;
+  /**
+   * Decimal places for EVERY amount, whatever its currency. Integer 0-4.
+   *
+   * Required, not optional: an optional field means a `?? 2` at every read,
+   * and a silent default of 2 is exactly the wrongness that the old
+   * per-currency table's required argument existed to prevent.
+   */
+  digits: number;
   /** Optional: no migration needed, existing datasets leave it undefined. */
   fxApiUrl?: string;
 }

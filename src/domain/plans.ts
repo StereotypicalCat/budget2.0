@@ -21,9 +21,8 @@ export function equalSlices(
 }
 
 /**
- * Every slice of a schedule carries the purchase's currency, so the first one
- * names the currency to round in. Rounding to a hardcoded 2 places would be
- * wrong for any currency whose minor unit is not hundredths.
+ * Digits are passed in rather than assumed: rounding to a hardcoded 2 places
+ * is wrong the moment the dataset's decimals setting is not hundredths.
  */
 export function sliceTotal(slices: ScheduleSlice[], digits: number): number {
   const sum = slices.reduce((total, s) => total + s.amount.amount, 0);

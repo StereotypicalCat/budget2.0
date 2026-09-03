@@ -1,11 +1,10 @@
 import { useRef } from "react";
 import { XIcon } from "lucide-react";
 import { useDataset } from "../hooks/useDataset.ts";
-import { digitsFor } from "../../domain/currencies.ts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatMoney } from "../format.ts";
+import { useMoneyFormat } from "../hooks/useMoneyFormat.ts";
 import {
   bulkTotal,
   isBlankLine,
@@ -28,7 +27,8 @@ interface Props {
  * on touch devices too. That is why there is no "Add line" button.
  */
 export function BulkLines({ draft, onChange }: Props) {
-  const digits = digitsFor(useDataset().currencies, draft.currency);
+  const digits = useDataset().settings.digits;
+  const fmt = useMoneyFormat();
   const descriptionRefs = useRef<Array<HTMLInputElement | null>>([]);
   const noteRefs = useRef<Array<HTMLInputElement | null>>([]);
 
@@ -135,7 +135,7 @@ export function BulkLines({ draft, onChange }: Props) {
 
       <p className="text-right text-xs text-muted-foreground">
         {filledCount} line{filledCount === 1 ? "" : "s"} &middot;{" "}
-        <span className="font-money">{formatMoney(bulkTotal(draft, digits), draft.currency)}</span>
+        <span className="font-money">{fmt.money(bulkTotal(draft, digits), draft.currency)}</span>
       </p>
     </fieldset>
   );

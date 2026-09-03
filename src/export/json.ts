@@ -59,8 +59,13 @@ const CURRENCY_CODE = /^[A-Z]{2,8}$/;
 
 /**
  * Validates the currency table itself, before anything is checked against it.
- * A table with a duplicate code would make `digitsFor` resolve arbitrarily,
- * and a non-integer or absurd `digits` would round money to nonsense.
+ * A duplicate code would make two definitions compete for the same identity —
+ * the code keys the FX table and every stored Money.
+ *
+ * Decimal places are NOT checked here any more: they are one dataset-wide
+ * setting, validated below. A per-currency `digits` surviving in a hand-edited
+ * file is dropped rather than refused — an unknown field is no reason to turn
+ * away the owner's only backup.
  */
 function requireCurrencyTable(data: Record<string, unknown>): CurrencyDef[] {
   const raw = data.currencies;
@@ -88,12 +93,6 @@ function requireCurrencyTable(data: Record<string, unknown>): CurrencyDef[] {
     }
     seen.add(code);
 
-    const digits = entry.digits;
-    if (typeof digits !== "number" || !Number.isInteger(digits) || digits < 0 || digits > 4) {
-      throw new ImportValidationError(
-        `Currency "${code}" has invalid decimal places ${String(digits)}; expected an integer 0-4`,
-      );
-    }
     if (entry.symbol !== undefined && typeof entry.symbol !== "string") {
       throw new ImportValidationError(`Currency "${code}" has a non-string symbol`);
     }
@@ -103,7 +102,6 @@ function requireCurrencyTable(data: Record<string, unknown>): CurrencyDef[] {
 
     table.push({
       code,
-      digits,
       ...(typeof entry.symbol === "string" ? { symbol: entry.symbol } : {}),
       ...(typeof entry.name === "string" ? { name: entry.name } : {}),
     });
@@ -145,6 +143,10 @@ export function parseDatasetJson(text: string): Dataset {
 
   const data = dataset as unknown as Record<string, unknown>;
   const currencies = requireCurrencyTable(data);
+  // The validated table replaces the raw one, so what comes back is normalised:
+  // trimmed symbols and names, and no stray per-currency `digits` left over
+  // from a hand-edited or pre-v6 file.
+  dataset.currencies = currencies;
   const defined = new Set(currencies.map((currency) => currency.code));
   requireArray(data, "posts");
   requireArray(data, "months");
@@ -152,6 +154,14 @@ export function parseDatasetJson(text: string): Dataset {
   requireArray(data, "fxRates");
 
   requireCurrency(dataset.settings.baseCurrency, "settings.baseCurrency", defined);
+  // One setting, every currency. Bad digits here would round every amount in
+  // the dataset to nonsense, so this is checked before anything is folded.
+  const digits = dataset.settings.digits;
+  if (typeof digits !== "number" || !Number.isInteger(digits) || digits < 0 || digits > 4) {
+    throw new ImportValidationError(
+      `settings.digits is ${String(digits)}; expected a whole number of decimal places between 0 and 4`,
+    );
+  }
   if (!MONTH_ID.test(dataset.settings.foldStartMonth)) {
     throw new ImportValidationError(
       `Invalid foldStartMonth "${dataset.settings.foldStartMonth}"`,

@@ -175,7 +175,7 @@ describe("reset", () => {
     // Diverge from the seed in every direction a reset has to undo: an added
     // currency, a renamed post, recorded income and a purchase.
     await store.mutate((draft) => {
-      draft.currencies.push({ code: "JPY", digits: 0, symbol: "\u00a5", name: "Japanese yen" });
+      draft.currencies.push({ code: "JPY", symbol: "\u00a5", name: "Japanese yen" });
       draft.posts[0]!.name = "Renamed";
       draft.posts.push({
         id: "extra",

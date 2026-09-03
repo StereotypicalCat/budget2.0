@@ -3,9 +3,10 @@ import { useDataset } from "../hooks/useDataset.ts";
 import { monthView } from "../../domain/views.ts";
 import { chargesForPurchaseInMonth, sliceAmountForMonth } from "../../domain/charges.ts";
 import { addMonths, compareMonths } from "../../domain/months.ts";
-import { formatMoney, formatSignedMoney } from "../format.ts";
+import { useMoneyFormat } from "../hooks/useMoneyFormat.ts";
 
 export function PostMonthRoute() {
+  const fmt = useMoneyFormat();
   const { postId = "", monthId = "" } = useParams();
   const dataset = useDataset();
   const post = dataset.posts.find((p) => p.id === postId);
@@ -20,7 +21,7 @@ export function PostMonthRoute() {
       monthId,
       base,
       dataset.fxRates,
-      dataset.currencies,
+      dataset.settings.digits,
     );
     const mine = charges.find((c) => c.postId === postId);
     return mine ? [{ purchase, amount: mine.amount }] : [];
@@ -72,23 +73,23 @@ export function PostMonthRoute() {
                   : ""
             }`}
           >
-            {formatSignedMoney(row?.figures.carriedIn ?? 0, base)}
+            {fmt.signedMoney(row?.figures.carriedIn ?? 0, base)}
           </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Allocated</dt>
-          <dd className="font-money">{formatMoney(row?.figures.allocation ?? 0, base)}</dd>
+          <dd className="font-money">{fmt.money(row?.figures.allocation ?? 0, base)}</dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Spent</dt>
-          <dd className="font-money">{formatMoney(row?.figures.charges ?? 0, base)}</dd>
+          <dd className="font-money">{fmt.money(row?.figures.charges ?? 0, base)}</dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Remaining</dt>
           <dd
             className={`font-money ${(row?.figures.remaining ?? 0) < 0 ? "text-overspend" : ""}`}
           >
-            {formatSignedMoney(row?.figures.remaining ?? 0, base)}
+            {fmt.signedMoney(row?.figures.remaining ?? 0, base)}
           </dd>
         </div>
       </dl>
@@ -107,7 +108,7 @@ export function PostMonthRoute() {
               {purchase.splits.length > 1 && (
                 <span className="text-xs text-muted-foreground">split</span>
               )}
-              <span className="font-money">{formatMoney(amount, base)}</span>
+              <span className="font-money">{fmt.money(amount, base)}</span>
             </li>
           ))}
           {thisMonth.length === 0 && <li className="py-2 text-muted-foreground">Nothing yet.</li>}
@@ -123,7 +124,7 @@ export function PostMonthRoute() {
                 <span className="w-20">{slice.month}</span>
                 <span className="flex-1">{purchase.description}</span>
                 <span className="font-money">
-                  {formatMoney(slice.amount.amount, slice.amount.currency)}
+                  {fmt.money(slice.amount.amount, slice.amount.currency)}
                 </span>
               </li>
             ))}

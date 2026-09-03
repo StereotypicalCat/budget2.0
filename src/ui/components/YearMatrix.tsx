@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { formatAmount } from "../format.ts";
+import { useMoneyFormat } from "../hooks/useMoneyFormat.ts";
 import type { YearViewModel } from "../../domain/views.ts";
 
 interface Props {
@@ -14,6 +14,7 @@ interface Props {
  * recomputes rollover.
  */
 export function YearMatrix({ view, mode }: Props) {
+  const fmt = useMoneyFormat();
   return (
     // Thirteen columns of figures cannot fit any realistic card, so the table
     // scrolls. The fade tells you that: without it the matrix just appears to
@@ -37,11 +38,11 @@ export function YearMatrix({ view, mode }: Props) {
               <td className="py-2">Income</td>
               {view.incomeByMonth.map((income, i) => (
                 <td key={i} className="font-money py-2 pl-4 text-right whitespace-nowrap">
-                  {formatAmount(income)}
+                  {fmt.amount(income)}
                 </td>
               ))}
               <td className="font-money py-2 pl-4 text-right whitespace-nowrap">
-                {formatAmount(view.totalIncome)}
+                {fmt.amount(view.totalIncome)}
               </td>
             </tr>
 
@@ -61,7 +62,7 @@ export function YearMatrix({ view, mode }: Props) {
                         mode === "balance" && value < 0 ? "text-overspend" : ""
                       }`}
                     >
-                      {formatAmount(value)}
+                      {fmt.amount(value)}
                     </td>
                   );
                 })}
@@ -70,7 +71,7 @@ export function YearMatrix({ view, mode }: Props) {
                     mode === "balance" && row.closingBalance < 0 ? "text-overspend" : ""
                   }`}
                 >
-                  {formatAmount(mode === "spend" ? row.totalCharges : row.closingBalance)}
+                  {fmt.amount(mode === "spend" ? row.totalCharges : row.closingBalance)}
                 </td>
               </tr>
             ))}

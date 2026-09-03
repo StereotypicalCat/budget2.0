@@ -10,6 +10,7 @@ import {
   addCurrency,
   removeCurrency,
   setBaseCurrency,
+  setDigits,
   setFxRate,
   removeFxRate,
   updateCurrency,
@@ -68,29 +69,65 @@ export function CurrencySection() {
     >
       {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
 
-      <div className="mb-5 space-y-1.5">
-        <Label
-          htmlFor="base-currency"
-          className="text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted"
-        >
-          Base currency (all totals use this)
-        </Label>
-        <NativeSelect
-          id="base-currency"
-          className="w-40"
-          value={base}
-          onChange={(event) => {
-            const currency = event.target.value;
-            mutate((draft) => setBaseCurrency(draft, currency));
-          }}
-        >
-          {dataset.currencies.map(({ code }) => (
-            <option key={code} value={code}>
-              {code}
-            </option>
-          ))}
-        </NativeSelect>
+      <div className="mb-5 flex flex-wrap items-end gap-x-8 gap-y-4">
+        <div className="space-y-1.5">
+          <Label
+            htmlFor="base-currency"
+            className="text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted"
+          >
+            Base currency (all totals use this)
+          </Label>
+          <NativeSelect
+            id="base-currency"
+            className="w-40"
+            value={base}
+            onChange={(event) => {
+              const currency = event.target.value;
+              mutate((draft) => setBaseCurrency(draft, currency));
+            }}
+          >
+            {dataset.currencies.map(({ code }) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label
+            htmlFor="digits"
+            className="text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted"
+          >
+            Decimals (all amounts)
+          </Label>
+          <Input
+            id="digits"
+            type="number"
+            min="0"
+            max="4"
+            step="1"
+            className="font-money h-9 w-20"
+            value={dataset.settings.digits}
+            onChange={(event) => {
+              // Captured before mutate, which defers behind the write queue —
+              // React resets the DOM value first, so reading it inside the
+              // callback commits the OLD one. AGENTS.md §2.
+              const digits = Number(event.target.value);
+              // Guarded here rather than letting setDigits throw: this is an
+              // event handler, and no error boundary catches a throw from one.
+              if (!Number.isInteger(digits) || digits < 0 || digits > 4) return;
+              mutate((draft) => setDigits(draft, digits));
+            }}
+          />
+        </div>
       </div>
+
+      <p className="mb-5 max-w-[70ch] text-xs leading-relaxed text-budget-ink-muted">
+        Every currency rounds to this. Changing it does not rewrite amounts you
+        have already recorded — they keep the precision they were entered with,
+        and totals recompute at the new setting.
+      </p>
 
       {/* `-mr-2 pr-2`, not a bare `overflow-x-auto`: the row's remove button
           carries `-mr-2` so its label sits flush with the card's content edge
@@ -107,7 +144,6 @@ export function CurrencySection() {
               <th className="py-2 font-medium">Code</th>
               <th className="py-2 pl-4 font-medium">Name</th>
               <th className="py-2 pl-4 font-medium">Symbol</th>
-              <th className="py-2 pl-4 text-right font-medium">Decimals</th>
               <th className="py-2 pl-4 text-right font-medium">1 unit = ? {base}</th>
               <th className="py-2 pl-4 text-right font-medium">Source</th>
               <th className="py-2 pl-4" />
@@ -143,22 +179,6 @@ export function CurrencySection() {
                       onChange={(event) => {
                         const symbol = event.target.value;
                         mutate((draft) => updateCurrency(draft, currency.code, { symbol }));
-                      }}
-                    />
-                  </td>
-                  <td className="py-2 pl-4 text-right">
-                    <Input
-                      type="number"
-                      min="0"
-                      max="4"
-                      step="1"
-                      className="font-money ml-auto h-8 w-16 text-right"
-                      aria-label={`Decimal places for ${currency.code}`}
-                      value={currency.digits}
-                      onChange={(event) => {
-                        const digits = Number(event.target.value);
-                        if (!Number.isInteger(digits) || digits < 0 || digits > 4) return;
-                        mutate((draft) => updateCurrency(draft, currency.code, { digits }));
                       }}
                     />
                   </td>
@@ -265,28 +285,21 @@ export function CurrencySection() {
 }
 
 /**
- * Decimals default to 2 because almost every currency uses hundredths; the
- * field is there for the ones that do not (yen at 0, dinars at 3).
+ * No decimals field: they are one setting for the whole dataset now, edited
+ * above the table rather than per currency.
  */
-function AddCurrency({ onAdd }: { onAdd: (def: { code: Currency; digits: number; symbol?: string; name?: string }) => void }) {
+function AddCurrency({ onAdd }: { onAdd: (def: { code: Currency; symbol?: string; name?: string }) => void }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
-  const [digits, setDigits] = useState("2");
 
-  const parsedDigits = Number(digits);
-  const canAdd =
-    /^[A-Za-z]{2,8}$/.test(code.trim()) &&
-    Number.isInteger(parsedDigits) &&
-    parsedDigits >= 0 &&
-    parsedDigits <= 4;
+  const canAdd = /^[A-Za-z]{2,8}$/.test(code.trim());
 
   function add() {
-    onAdd({ code: code.trim(), digits: parsedDigits, symbol, name });
+    onAdd({ code: code.trim(), symbol, name });
     setCode("");
     setName("");
     setSymbol("");
-    setDigits("2");
   }
 
   return (
@@ -319,23 +332,6 @@ function AddCurrency({ onAdd }: { onAdd: (def: { code: Currency; digits: number;
         onChange={(event) => {
           const next = event.target.value;
           setSymbol(next);
-        }}
-      />
-      {/* No visible label. Its three siblings are labelled by placeholder, and
-          the DECIMALS column heading sits directly above this field in the
-          table — a fourth label here read as a heading for the whole row. */}
-      <Input
-        id="new-digits"
-        type="number"
-        min="0"
-        max="4"
-        step="1"
-        aria-label="Decimal places for the new currency"
-        className="font-money h-9 w-16 text-right"
-        value={digits}
-        onChange={(event) => {
-          const next = event.target.value;
-          setDigits(next);
         }}
       />
       <Button variant="outline" disabled={!canAdd} onClick={add}>

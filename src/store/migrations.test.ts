@@ -164,29 +164,29 @@ describe("v2 -> v3: currencies become data", () => {
     };
   }
 
-  test("the three shipped currencies are added, with their decimals", () => {
+  test("the three shipped currencies are added", () => {
     const migrated = migrate(v2());
     expect(migrated.settings.schemaVersion).toBe(SCHEMA_VERSION);
     // The first three come from this step, frozen at what it always produced.
-    // GBP is appended later, by 4 -> 5; see that block.
+    // GBP is appended later, by 4 -> 5; see that block. The decimals this step
+    // wrote per currency are collapsed into one setting by 5 -> 6, so they no
+    // longer appear on the definitions here.
     expect(migrated.currencies).toEqual([
-      { code: "DKK", digits: 2, symbol: "kr", name: "Danish krone" },
-      { code: "USD", digits: 2, symbol: "$", name: "US dollar" },
-      { code: "EUR", digits: 2, symbol: "€", name: "Euro" },
-      { code: "GBP", digits: 2, symbol: "£", name: "British pound" },
+      { code: "DKK", symbol: "kr", name: "Danish krone" },
+      { code: "USD", symbol: "$", name: "US dollar" },
+      { code: "EUR", symbol: "€", name: "Euro" },
+      { code: "GBP", symbol: "£", name: "British pound" },
     ]);
   });
 
   /**
    * The whole point of the migration being safe: every currency that existed
-   * had two decimal places, and the seeded table says two, so not one stored
-   * amount can round differently than it did before.
+   * had two decimal places, this step wrote two, and 5 -> 6 takes the maximum
+   * of those — two. So not one stored amount can round differently than it did
+   * before, across the whole chain.
    */
   test("no amount can round differently than it did under v2", () => {
-    const migrated = migrate(v2());
-    for (const currency of migrated.currencies) {
-      expect(currency.digits).toBe(2);
-    }
+    expect(migrate(v2()).settings.digits).toBe(2);
   });
 
   test("nothing else about the dataset is touched", () => {
@@ -312,7 +312,15 @@ describe("v4 -> v5: GBP joins the prebaked currencies", () => {
     // definition, and a migration that corrected it would be editing data.
     const mine = { code: "GBP", digits: 0, symbol: "quid" };
     const out = migrate(v4([DKK, mine]));
-    expect(out.currencies.find((c) => c.code === "GBP")).toEqual(mine);
+    // Their symbol survives; their 0 does not, because 5 -> 6 collapses every
+    // per-currency figure into one setting and takes the maximum — DKK's 2.
+    // This is the cost that spec records: sterling and kroner can disagree
+    // about decimals in a v5 dataset and cannot in a v6 one.
+    expect(out.currencies.find((c) => c.code === "GBP")).toEqual({
+      code: "GBP",
+      symbol: "quid",
+    });
+    expect(out.settings.digits).toBe(2);
   });
 
   test("a GBP rate the owner already has keeps their number", () => {
@@ -329,13 +337,83 @@ describe("v4 -> v5: GBP joins the prebaked currencies", () => {
   test("everything else is left untouched", () => {
     const out = migrate(v4([DKK], [USD_RATE]));
     expect(out.fxRates.find((r) => r.currency === "USD")).toEqual(USD_RATE);
-    expect(out.currencies[0]).toEqual(DKK);
+    const { digits: _dropped, ...dkkWithoutDigits } = DKK;
+    expect(out.currencies[0]).toEqual(dkkWithoutDigits);
   });
 
   test("GBP is not added twice when the migration is somehow reapplied", () => {
     const once = migrate(v4([DKK]));
     const codes = once.currencies.filter((c) => c.code === "GBP");
     expect(codes).toHaveLength(1);
+  });
+});
+
+describe("v5 -> v6: decimals become one setting for the whole dataset", () => {
+  const v5 = (currencies: any[]) => ({
+    settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 5 },
+    currencies,
+    fxRates: [],
+    posts: [],
+    months: [],
+    purchases: [],
+  });
+
+  test("the setting takes the MAXIMUM of the per-currency digits", () => {
+    // Not the base currency's 2: a dataset holding KWD has three-decimal
+    // amounts already stored, and migrating to 2 would truncate the next edit
+    // of one. The maximum can only ever keep more precision, never less.
+    const out = migrate(v5([
+      { code: "DKK", digits: 2 },
+      { code: "JPY", digits: 0 },
+      { code: "KWD", digits: 3 },
+    ]));
+    expect(out.settings.digits).toBe(3);
+  });
+
+  test("digits are stripped from every currency entry", () => {
+    const out = migrate(v5([
+      { code: "DKK", digits: 2, symbol: "kr", name: "Danish krone" },
+      { code: "JPY", digits: 0 },
+    ]));
+    for (const currency of out.currencies) {
+      expect("digits" in currency).toBe(false);
+    }
+    // Everything else about the definition survives.
+    expect(out.currencies[0]).toEqual({ code: "DKK", symbol: "kr", name: "Danish krone" });
+  });
+
+  test("a table where every currency agrees is behaviour-preserving", () => {
+    // The shipped dataset: four currencies, all at 2, so nothing rounds
+    // differently after the step than before it.
+    const out = migrate(v5([
+      { code: "DKK", digits: 2 },
+      { code: "USD", digits: 2 },
+      { code: "EUR", digits: 2 },
+      { code: "GBP", digits: 2 },
+    ]));
+    expect(out.settings.digits).toBe(2);
+  });
+
+  test.each([
+    ["an empty table", []],
+    ["digits that are not numbers", [{ code: "DKK", digits: "two" }]],
+    ["entries with no digits at all", [{ code: "DKK" }]],
+  ])("%s falls back to two places rather than NaN", (_label, currencies) => {
+    const out = migrate(v5(currencies as any[]));
+    expect(out.settings.digits).toBe(2);
+  });
+
+  test("a missing currencies table does not throw", () => {
+    const data: any = v5([]);
+    delete data.currencies;
+    expect(migrate(data).settings.digits).toBe(2);
+  });
+
+  test("everything else in settings is left untouched", () => {
+    const out = migrate(v5([{ code: "DKK", digits: 2 }]));
+    expect(out.settings.baseCurrency).toBe("DKK");
+    expect(out.settings.foldStartMonth).toBe("2026-01");
+    expect(out.settings.schemaVersion).toBe(SCHEMA_VERSION);
   });
 });
 

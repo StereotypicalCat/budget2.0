@@ -1,7 +1,7 @@
 import { newId } from "../domain/seed.ts";
 import { compareMonths, monthOf } from "../domain/months.ts";
 import { roundMoney } from "../domain/money.ts";
-import { currencyUsage, digitsFor, normalizeCurrencyCode } from "../domain/currencies.ts";
+import { currencyUsage, normalizeCurrencyCode } from "../domain/currencies.ts";
 import type {
   Currency,
   CurrencyDef,
@@ -24,8 +24,8 @@ import type {
  * Every function here mutates a draft Dataset in place. They are called from
  * store.mutate(), which clones before applying and writes through afterwards.
  *
- * Every MONEY amount that flows through here is rounded to its currency's
- * minor unit (via roundMoney) before it lands in the draft, per AGENTS.md's
+ * Every MONEY amount that flows through here is rounded to the dataset's
+ * decimal places (via roundMoney) before it lands in the draft, per AGENTS.md's
  * "round before persisting" rule. FxRate.baseUnitsPerOne is deliberately
  * exempted in setFxRate below — an exchange rate is not money, and rounding
  * it to cents would be wrong in kind (see the comment there).
@@ -50,7 +50,7 @@ function round2(value: number): number {
 
 function roundMoneyValue(draft: Dataset, money: Money): Money {
   return {
-    amount: roundMoney(money.amount, digitsFor(draft.currencies, money.currency)),
+    amount: roundMoney(money.amount, draft.settings.digits),
     currency: money.currency,
   };
 }
@@ -65,17 +65,16 @@ function roundRule(draft: Dataset, rule: Rule): Rule {
 /**
  * A split's `value` is a percentage in "percent" mode and MONEY in the
  * purchase's currency in "fixed" mode, so the two round differently: a
- * percentage to 2 decimals, money to its currency's minor unit. Rounding
- * both to a hardcoded 2 places is correct only while every supported
- * currency happens to use hundredths.
+ * percentage always to 2 decimals, money to the dataset's decimal places.
+ * Rounding both to a hardcoded 2 is correct only while that setting is 2.
  */
 function roundSplits(
   draft: Dataset,
   splits: Split[],
   splitMode: Purchase["splitMode"],
-  currency: Currency,
+  _currency: Currency,
 ): Split[] {
-  const digits = digitsFor(draft.currencies, currency);
+  const digits = draft.settings.digits;
   return splits.map((split) => ({
     ...split,
     value: splitMode === "fixed" ? roundMoney(split.value, digits) : round2(split.value),
@@ -261,8 +260,8 @@ export function cancelScheduleFrom(
 
 /**
  * Stores the rate exactly as passed. Exchange rates are not money: they are
- * kept at six decimal places (see fxApi.ts's toFixed(6)), and rounding to a
- * currency's minor unit would quantize a rate below 0.01 straight to zero.
+ * kept at six decimal places (see fxApi.ts's toFixed(6)), and rounding one to
+ * the dataset's decimals would quantize a rate below 0.01 straight to zero.
  */
 /** Codes are identity, so they are validated the same way on every path. */
 const CURRENCY_CODE = /^[A-Z]{2,8}$/;
@@ -272,14 +271,8 @@ function requireCurrencyDef(def: CurrencyDef): CurrencyDef {
   if (!CURRENCY_CODE.test(code)) {
     throw new Error(`Currency code "${def.code}" must be 2-8 letters`);
   }
-  if (!Number.isInteger(def.digits) || def.digits < 0 || def.digits > 4) {
-    throw new Error(
-      `Currency "${code}" needs a whole number of decimal places between 0 and 4`,
-    );
-  }
   return {
     code,
-    digits: def.digits,
     ...(def.symbol?.trim() ? { symbol: def.symbol.trim() } : {}),
     ...(def.name?.trim() ? { name: def.name.trim() } : {}),
   };
@@ -344,6 +337,27 @@ export function removeFxRate(draft: Dataset, currency: Currency): void {
 }
 
 /** The base currency never has a rate row of its own. */
+/**
+ * The decimal places every amount rounds to, dataset-wide.
+ *
+ * Amounts already stored are deliberately NOT rewritten. Moving the setting is
+ * a rounding rule going forward: 49.95 stays 49.95 and displays as 50, while
+ * every total recomputes at the new precision. Rewriting each `Money` would be
+ * a destructive whole-dataset write — the kind that owes the owner a backup
+ * export first — and it is lossy one way, since 2 -> 0 discards what 0 -> 2
+ * cannot bring back.
+ *
+ * Throws rather than clamping: a digit count outside 0-4 is a caller bug, and
+ * silently storing 2 instead is how a wrong number becomes invisible. The
+ * Settings input guards before calling, so no event handler sees this throw.
+ */
+export function setDigits(draft: Dataset, digits: number): void {
+  if (!Number.isInteger(digits) || digits < 0 || digits > 4) {
+    throw new Error("Decimal places must be a whole number between 0 and 4");
+  }
+  draft.settings.digits = digits;
+}
+
 export function setBaseCurrency(draft: Dataset, currency: Currency): void {
   draft.settings.baseCurrency = currency;
   draft.fxRates = draft.fxRates.filter((r) => r.currency !== currency);

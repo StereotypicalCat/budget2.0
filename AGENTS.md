@@ -15,16 +15,26 @@ and `docs/specs/`, and is not repeated here.
   (`src/domain/smoke.test.ts` imports it without one).
 - **Money is a float, rounded at every boundary.** Use `roundMoney` from
   `src/domain/money.ts` after any division, after any FX conversion, and before
-  persisting.
+  persisting. DISPLAY is a boundary too: `src/ui/format.ts` takes digits like
+  everything else, and `useMoneyFormat()` is how a component gets them bound to
+  the dataset. A pinned 2 lived in that file once and made the decimals setting
+  invisible at 0 and lossy at 3.
 - **`roundMoney(amount, digits)` takes a DIGIT COUNT, not a currency code.**
-  Decimal places live in `Dataset.currencies`, because the owner defines
-  currencies; resolve them with `digitsFor(dataset.currencies, code)`. The
-  argument is required on purpose — a default of 2 is right for every currency
-  the app shipped with, so a missed call site would pass every test and be
-  silently wrong for the first zero-decimal currency added.
+  Decimal places are ONE setting for the whole dataset — `settings.digits` —
+  and every currency rounds to it. Read that field; there is no `digitsFor`,
+  and `CurrencyDef` has no `digits`. The argument is required on purpose: a
+  default of 2 is right while the setting is 2, so a missed call site would
+  pass every test and go silently wrong the moment the owner moves it.
+  A dataset mixing minor units (yen at 0 beside kroner at 2) CANNOT be
+  described, and the app does not warn — the owner chose that, and
+  `docs/specs/2026-09-02-global-decimals-design.md` records the argument and
+  what re-adding a per-currency override would cost. Do not "fix" it by
+  reintroducing per-currency digits without that decision being revisited.
 - **When splitting an amount, never round the last part independently.** Compute
   it as `total - sum(others)` so the parts sum exactly to the whole.
-- **`Currency` is an open string code; `Dataset.currencies` is the authority.**
+- **`Currency` is an open string code; `Dataset.currencies` is the authority**
+  on which codes exist and on their names and symbols — NOT on their decimals,
+  which are dataset-wide per the rule above.
   There is no global list of valid currencies. A code is IDENTITY — it keys the
   FX table and every stored `Money` — so codes are normalised uppercase, are
   never editable, and a currency still referenced cannot be removed
@@ -82,11 +92,14 @@ ship twice — re-introducing one is a regression, not a style choice.
   rejection: the button appears to do nothing and the user is told nothing.
   `useMutate` is the guard for most call sites.
   → `src/ui/storeWriteErrors.test.ts`
-- **`roundMoney` call sites must resolve real digits**, per §1.
+- **`roundMoney` call sites must read `settings.digits`**, per §1 — never a
+  literal, and never a per-currency lookup.
   → `src/domain/currencyDigits.test.ts` is the only test that can tell a real
-  implementation from one that assumes 2: it drives a JPY-style zero-decimal
-  currency through rounding, both FX directions, both split modes, plan
-  division, the fold and the month view.
+  implementation from one that assumes 2: it drives a dataset at ZERO decimals
+  through rounding, both FX directions, both split modes, plan division, the
+  fold and the month view, and asserts that raising the setting to 2 changes
+  what the fold produces. It cannot prove digits vary per currency, because
+  they no longer do.
 - **`process.env.BUN_PUBLIC_*` must be read via `try/catch`** — see
   `readBasePathEnv`. Bun inlines the literal only when the variable is set;
   unset, the bare reference reaches the browser and throws before the app boots.

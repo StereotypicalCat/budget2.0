@@ -2,7 +2,6 @@ import { zipSync, strToU8 } from "fflate";
 import { chargesForPurchaseInMonth, sliceAmountForMonth } from "../domain/charges.ts";
 import { monthRange } from "../domain/months.ts";
 import { roundMoney } from "../domain/money.ts";
-import { digitsFor } from "../domain/currencies.ts";
 import { datasetMonthSpan, monthView, summaryView } from "../domain/views.ts";
 import type { MonthViewModel } from "../domain/views.ts";
 import type { PostMonthFigures } from "../domain/fold.ts";
@@ -32,7 +31,7 @@ function summarySheet(dataset: Dataset, months: MonthId[], byMonth: FiguresByMon
     rows.push([
       text(post.name),
       ...perMonth.map(num),
-      num(roundMoney(perMonth.reduce((a, b) => a + b, 0), digitsFor(dataset.currencies, base))),
+      num(roundMoney(perMonth.reduce((a, b) => a + b, 0), dataset.settings.digits)),
     ]);
   }
 
@@ -88,7 +87,7 @@ function purchasesSheet(dataset: Dataset, months: MonthId[]): Sheet {
         monthId,
         base,
         dataset.fxRates,
-        dataset.currencies,
+        dataset.settings.digits,
       );
       for (const charge of charges) {
         rows.push([

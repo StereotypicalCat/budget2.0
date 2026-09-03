@@ -1,7 +1,7 @@
-import { SEED_CURRENCIES } from "./types.ts";
+import { DEFAULT_DIGITS, SEED_CURRENCIES } from "./types.ts";
 import type { CurrencyDef, Dataset, FxRate, MonthId, Post } from "./types.ts";
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 const SEED_POST_NAMES = ["Video Games", "Food", "Events and Social"] as const;
 
@@ -36,6 +36,7 @@ export function createSeedDataset(
       baseCurrency: "DKK",
       foldStartMonth: startMonth,
       schemaVersion: SCHEMA_VERSION,
+      digits: DEFAULT_DIGITS,
     },
     // Copied, so a caller passing shared constants cannot have them edited
     // out from under it the first time the user changes a rate or a currency.

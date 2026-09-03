@@ -2,15 +2,15 @@
  * Money is a float. Two rules make that safe, and both are about WHERE
  * rounding happens rather than how.
  *
- * Digits are passed in, never looked up from a table here. They live in the
- * dataset because the owner can define currencies, so every call site has to
- * resolve them with `digitsFor` — see src/domain/currencies.ts. That is
- * deliberate friction: a default of 2 would silently mis-round every
- * zero-decimal currency and no existing test would notice.
+ * Digits are passed in, never defaulted here. They come from the dataset —
+ * `settings.digits`, one value for every currency alike — so every call site
+ * has to be told. That is deliberate friction: a default of 2 would look right
+ * for every currency the app ships with, so a missed call site would pass the
+ * whole suite and be wrong only once the setting moves off 2.
  */
 
 /**
- * Rounds to a currency's minor unit. `toFixed` rounds the double's actual
+ * Rounds to the dataset's decimal places. `toFixed` rounds the double's actual
  * decimal value, which is the most predictable option available for binary
  * floats. Call this after every division and FX conversion, and before
  * persisting.

@@ -1,5 +1,4 @@
 import { incomeFor, isOverridden } from "./allocation.ts";
-import { digitsFor } from "./currencies.ts";
 import { figuresFor, foldBalances, type Fold, type PostMonthFigures } from "./fold.ts";
 import { roundMoney } from "./money.ts";
 import { compareMonths, monthOf, monthRange, monthsOfYear } from "./months.ts";
@@ -52,7 +51,7 @@ export function monthView(dataset: Dataset, monthId: MonthId): MonthViewModel {
   }
 
   const base = dataset.settings.baseCurrency;
-  const baseDigits = digitsFor(dataset.currencies, base);
+  const baseDigits = dataset.settings.digits;
   const totalAllocation = roundMoney(
     rows.reduce((sum, r) => sum + r.figures.allocation, 0),
     baseDigits,
@@ -96,7 +95,7 @@ export function yearView(dataset: Dataset, year: number): YearViewModel {
   const months = monthsOfYear(year);
   const fold = foldBalances(dataset, months[11]!);
   const base = dataset.settings.baseCurrency;
-  const baseDigits = digitsFor(dataset.currencies, base);
+  const baseDigits = dataset.settings.digits;
 
   const incomeByMonth = months.map((m) => incomeFor(dataset, m));
 
@@ -149,7 +148,7 @@ export function summaryView(
 ): SummaryViewModel {
   const months = monthRange(from, to);
   const base = dataset.settings.baseCurrency;
-  const baseDigits = digitsFor(dataset.currencies, base);
+  const baseDigits = dataset.settings.digits;
   const fold: Fold =
     months.length > 0 ? foldBalances(dataset, months[months.length - 1]!) : new Map();
 

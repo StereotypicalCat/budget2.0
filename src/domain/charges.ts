@@ -1,10 +1,8 @@
 import { toBase } from "./fx.ts";
-import { digitsFor } from "./currencies.ts";
 import { distributeByAmount, distributeByWeight, roundMoney } from "./money.ts";
 import { compareMonths, monthOf } from "./months.ts";
 import type {
   Currency,
-  CurrencyDef,
   Dataset,
   FxRate,
   Money,
@@ -73,18 +71,19 @@ export function chargesForPurchaseInMonth(
   monthId: MonthId,
   baseCurrency: Currency,
   rates: FxRate[],
-  currencies: readonly CurrencyDef[],
+  digits: number,
 ): Charge[] {
   const slice = sliceAmountForMonth(purchase, monthId);
   if (!slice) return [];
 
-  const sliceBase = toBase(slice, baseCurrency, rates, currencies);
+  const sliceBase = toBase(slice, baseCurrency, rates, digits);
   const index = remainderIndexOf(purchase);
   // Split proportions are computed in the PURCHASE's own currency, then the
-  // month's slice is distributed to those proportions in the BASE currency —
-  // so the two roundings use different digits.
-  const weights = splitPartsOfTotal(purchase, digitsFor(currencies, purchase.total.currency));
-  const parts = distributeByWeight(sliceBase, weights, index, digitsFor(currencies, baseCurrency));
+  // month's slice is distributed to those proportions in the BASE currency.
+  // One setting covers both roundings now; it used to be two lookups, one per
+  // currency, which is the only thing that changed here.
+  const weights = splitPartsOfTotal(purchase, digits);
+  const parts = distributeByWeight(sliceBase, weights, index, digits);
 
   return purchase.splits.map((split, i) => ({
     postId: split.postId,
@@ -98,14 +97,14 @@ export function chargesForMonth(
   monthId: MonthId,
 ): Map<PostId, number> {
   const totals = new Map<PostId, number>();
-  const baseDigits = digitsFor(dataset.currencies, dataset.settings.baseCurrency);
+  const baseDigits = dataset.settings.digits;
   for (const purchase of dataset.purchases) {
     const charges = chargesForPurchaseInMonth(
       purchase,
       monthId,
       dataset.settings.baseCurrency,
       dataset.fxRates,
-      dataset.currencies,
+      dataset.settings.digits,
     );
     for (const charge of charges) {
       const previous = totals.get(charge.postId) ?? 0;

@@ -223,3 +223,33 @@ describe("rule versions on import", () => {
     expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/everySecondTuesday/);
   });
 });
+
+describe("the decimal-places setting on import", () => {
+  test("a valid setting round-trips", () => {
+    const data = populated();
+    data.settings.digits = 0;
+    expect(parseDatasetJson(exportDatasetJson(data)).settings.digits).toBe(0);
+  });
+
+  test.each([
+    ["missing", undefined],
+    ["fractional", 1.5],
+    ["negative", -1],
+    ["beyond four places", 5],
+    ["a string", "2"],
+  ])("a %s setting is refused", (_label, value) => {
+    const data = populated() as any;
+    if (value === undefined) delete data.settings.digits;
+    else data.settings.digits = value;
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(ImportValidationError);
+  });
+
+  test("a per-currency digits left over in a hand-edited file is ignored, not refused", () => {
+    // An unknown field is not a reason to refuse the owner's only backup.
+    const data = populated() as any;
+    data.currencies[0].digits = 3;
+    const out = parseDatasetJson(JSON.stringify(data));
+    expect("digits" in out.currencies[0]!).toBe(false);
+    expect(out.settings.digits).toBe(2);
+  });
+});

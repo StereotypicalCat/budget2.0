@@ -1,11 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { useDataset } from "../hooks/useDataset.ts";
-import { digitsFor } from "../../domain/currencies.ts";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Label } from "@/components/ui/label";
 import { Segmented } from "./Segmented.tsx";
-import { formatAmount } from "../format.ts";
+import { useMoneyFormat } from "../hooks/useMoneyFormat.ts";
 import type { PurchaseDraft, SplitDraft } from "../purchaseForm.ts";
 import { splitBalance } from "../purchaseForm.ts";
 import type { Post } from "../../domain/types.ts";
@@ -17,7 +16,8 @@ interface Props {
 }
 
 export function SplitEditor({ draft, posts, onChange }: Props) {
-  const balance = splitBalance(draft, digitsFor(useDataset().currencies, draft.currency));
+  const balance = splitBalance(draft, useDataset().settings.digits);
+  const fmt = useMoneyFormat();
   const unit = draft.splitMode === "percent" ? "%" : draft.currency;
 
   function updateSplit(index: number, changes: Partial<SplitDraft>) {
@@ -133,7 +133,7 @@ export function SplitEditor({ draft, posts, onChange }: Props) {
         <span className={balance === 0 ? "text-muted-foreground" : ""}>
           {balance === 0
             ? "Splits balance exactly."
-            : `${formatAmount(balance)} ${unit} unassigned — the rounding post absorbs it.`}
+            : `${fmt.amount(balance)} ${unit} unassigned — the rounding post absorbs it.`}
         </span>
       </div>
     </fieldset>

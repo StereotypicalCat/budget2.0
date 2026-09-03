@@ -5,11 +5,12 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useDataset } from "../hooks/useDataset.ts";
 import { datasetMonthSpan, summaryView } from "../../domain/views.ts";
-import { formatAmount, formatMoney } from "../format.ts";
+import { useMoneyFormat } from "../hooks/useMoneyFormat.ts";
 import { Section, Stat } from "../components/Section.tsx";
 import { Segmented } from "../components/Segmented.tsx";
 
 export function SummaryRoute() {
+  const fmt = useMoneyFormat();
   const dataset = useDataset();
   const span = datasetMonthSpan(dataset);
   const [from, setFrom] = useState(span.from);
@@ -46,10 +47,10 @@ export function SummaryRoute() {
         </div>
 
         <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-4 border-t border-budget-rule pt-5">
-        <Stat label="Income">{formatMoney(view.totalIncome, base)}</Stat>
-        <Stat label="Spent">{formatMoney(view.totalCharges, base)}</Stat>
+        <Stat label="Income">{fmt.money(view.totalIncome, base)}</Stat>
+        <Stat label="Spent">{fmt.money(view.totalCharges, base)}</Stat>
           <Stat label="Difference" tone={difference < 0 ? "overspend" : "default"}>
-            {formatMoney(difference, base)}
+            {fmt.money(difference, base)}
           </Stat>
         </dl>
       </Section>
@@ -81,7 +82,7 @@ export function SummaryRoute() {
               ? view.byPost.map((entry) => (
                   <tr key={entry.post.id} className="border-b border-budget-rule transition-colors last:border-0 hover:bg-accent/60">
                     <td className="py-2.5">{entry.post.name}</td>
-                    <td className="font-money py-2.5 pl-6 text-right">{formatAmount(entry.charges)}</td>
+                    <td className="font-money py-2.5 pl-6 text-right">{fmt.amount(entry.charges)}</td>
                     <td className="font-money py-2.5 pl-6 text-right text-budget-ink-muted">
                       {view.totalCharges === 0
                         ? "—"
@@ -96,7 +97,7 @@ export function SummaryRoute() {
                         {entry.monthId}
                       </Link>
                     </td>
-                    <td className="font-money py-2.5 pl-6 text-right">{formatAmount(entry.charges)}</td>
+                    <td className="font-money py-2.5 pl-6 text-right">{fmt.amount(entry.charges)}</td>
                     <td className="font-money py-2.5 pl-6 text-right text-budget-ink-muted">
                       {view.totalCharges === 0
                         ? "—"

@@ -95,14 +95,21 @@ A float, deliberately, with two rules that make it safe:
 **`FxRate.baseUnitsPerOne` is never rounded.** Rates are stored at six decimals
 and are not money; quantizing one to cents is wrong in kind.
 
-**Decimal places are data, not a constant.** `Dataset.currencies` records each
-currency's code, name, symbol and digits, because the owner can define their
-own. `roundMoney` therefore takes a digit count and every call site resolves it
-with `digitsFor` — required rather than defaulted, so a missed site is a
-compile error instead of something that works for every 2-decimal currency and
-breaks on the first zero-decimal one. `src/domain/currencyDigits.test.ts` drives
-a zero-decimal currency through the whole stack, which is the only test that can
-tell a real implementation from one that assumes 2.
+**Decimal places are data, not a constant — one value for the whole dataset.**
+`Settings.digits` is what every amount rounds to, whatever its currency;
+`Dataset.currencies` records only a code, name and symbol. `roundMoney` takes a
+digit count and every call site reads that setting, required rather than
+defaulted, so a missed site is a compile error instead of something that works
+while the setting is 2 and breaks the moment it is not.
+`src/domain/currencyDigits.test.ts` drives a dataset at zero decimals through
+the whole stack, which is the only test that can tell a real implementation
+from one that assumes 2.
+
+The cost is explicit: a dataset mixing minor units — yen at 0 beside kroner at
+2 — cannot be described, and nothing in the app will warn about it. That was
+the owner's call, argued in full in
+[`specs/2026-09-02-global-decimals-design.md`](specs/2026-09-02-global-decimals-design.md),
+which also says what re-adding a per-currency override would take.
 
 ## Splits and finance plans compose
 

@@ -2,12 +2,13 @@ import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { useDataset } from "../hooks/useDataset.ts";
 import { yearView } from "../../domain/views.ts";
-import { formatMoney } from "../format.ts";
+import { useMoneyFormat } from "../hooks/useMoneyFormat.ts";
 import { YearMatrix } from "../components/YearMatrix.tsx";
 import { Segmented } from "../components/Segmented.tsx";
 import { Section, Stat } from "../components/Section.tsx";
 
 export function YearRoute() {
+  const fmt = useMoneyFormat();
   const { year = "" } = useParams();
   const dataset = useDataset();
   const [mode, setMode] = useState<"spend" | "balance">("spend");
@@ -35,8 +36,8 @@ export function YearRoute() {
 
       <Section>
         <dl className="flex flex-wrap gap-x-10 gap-y-4">
-          <Stat label="Income">{formatMoney(view.totalIncome, base)}</Stat>
-          <Stat label="Spent">{formatMoney(view.totalCharges, base)}</Stat>
+          <Stat label="Income">{fmt.money(view.totalIncome, base)}</Stat>
+          <Stat label="Spent">{fmt.money(view.totalCharges, base)}</Stat>
         </dl>
       </Section>
 

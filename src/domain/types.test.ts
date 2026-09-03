@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { DEFAULT_CURRENCY_DIGITS, SEED_CURRENCIES } from "./types.ts";
+import { DEFAULT_DIGITS, SEED_CURRENCIES } from "./types.ts";
 
 /**
  * This file used to assert "the supported currencies are exactly DKK, USD,
@@ -14,17 +14,26 @@ test("a new dataset starts with the currencies the app shipped with", () => {
 test("sterling carries the pound sign, so \"10£\" parses", () => {
   const gbp = SEED_CURRENCIES.find((c) => c.code === "GBP")!;
   expect(gbp.symbol).toBe("£");
-  expect(gbp.digits).toBe(2);
 });
 
-test("each seeded currency carries its decimals and a symbol to type", () => {
+test("each seeded currency carries a symbol to type and a name to read", () => {
   for (const currency of SEED_CURRENCIES) {
-    expect(currency.digits).toBe(2);
     expect(currency.symbol).toBeTruthy();
     expect(currency.name).toBeTruthy();
   }
 });
 
-test("the fallback for an undefined currency is two places", () => {
-  expect(DEFAULT_CURRENCY_DIGITS).toBe(2);
+/**
+ * Decimals are not a property of a currency here — they are one setting for
+ * the whole dataset. A definition still carrying `digits` would be a leftover
+ * that the import validator drops and nothing reads.
+ */
+test("no seeded currency declares decimals of its own", () => {
+  for (const currency of SEED_CURRENCIES) {
+    expect("digits" in currency).toBe(false);
+  }
+});
+
+test("a new dataset rounds to two places", () => {
+  expect(DEFAULT_DIGITS).toBe(2);
 });

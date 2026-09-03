@@ -1,9 +1,10 @@
 import { Link, useParams } from "react-router";
 import { useDataset } from "../hooks/useDataset.ts";
 import { yearView } from "../../domain/views.ts";
-import { formatAmount, formatMoney, formatSignedMoney } from "../format.ts";
+import { useMoneyFormat } from "../hooks/useMoneyFormat.ts";
 
 export function PostYearRoute() {
+  const fmt = useMoneyFormat();
   const { postId = "", year = "" } = useParams();
   const dataset = useDataset();
   const post = dataset.posts.find((p) => p.id === postId);
@@ -20,9 +21,9 @@ export function PostYearRoute() {
         {post.name} &middot; {year}
       </h1>
       <p className="text-sm text-muted-foreground">
-        Allocated {formatMoney(row.totalAllocation, base)} &middot; spent{" "}
-        {formatMoney(row.totalCharges, base)} &middot; closing balance{" "}
-        {formatSignedMoney(row.closingBalance, base)}
+        Allocated {fmt.money(row.totalAllocation, base)} &middot; spent{" "}
+        {fmt.money(row.totalCharges, base)} &middot; closing balance{" "}
+        {fmt.signedMoney(row.closingBalance, base)}
       </p>
 
       <div className="overflow-x-auto">
@@ -55,16 +56,16 @@ export function PostYearRoute() {
                           : ""
                     }`}
                   >
-                    {formatSignedMoney(figures.carriedIn, base)}
+                    {fmt.signedMoney(figures.carriedIn, base)}
                   </td>
-                  <td className="font-money py-2 text-right">{formatAmount(figures.allocation)}</td>
-                  <td className="font-money py-2 text-right">{formatAmount(figures.charges)}</td>
+                  <td className="font-money py-2 text-right">{fmt.amount(figures.allocation)}</td>
+                  <td className="font-money py-2 text-right">{fmt.amount(figures.charges)}</td>
                   <td
                     className={`font-money py-2 text-right font-medium ${
                       figures.remaining < 0 ? "text-overspend" : ""
                     }`}
                   >
-                    {formatSignedMoney(figures.remaining, base)}
+                    {fmt.signedMoney(figures.remaining, base)}
                   </td>
                 </tr>
               );

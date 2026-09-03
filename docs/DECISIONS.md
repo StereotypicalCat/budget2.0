@@ -18,7 +18,7 @@ record.
   no household mode. → [`PRODUCT.md`](PRODUCT.md)
 - **Schema migrations are mandatory, not optional.** `schemaVersion` plus
   ordered migration functions applied on load, because IndexedDB holds the
-  user's only copy of their financial data. Now at version 5.
+  user's only copy of their financial data. Now at version 6.
   → [`specs/2026-09-01-budget-app-design.md`](specs/2026-09-01-budget-app-design.md)
 - **A destructive write downloads a backup first.** Import and reset both export
   before replacing, and abort if the export fails. → commit `ac3d18a`
@@ -33,13 +33,21 @@ record.
   last part as `total - sum(others)`.
   → [`specs/2026-09-01-budget-app-design.md`](specs/2026-09-01-budget-app-design.md)
 - **`roundMoney` takes a digit count, and the argument is required.** Rejected a
-  default of 2: it is correct for every currency the app shipped with, so a
-  missed call site would pass every test and fail on the first zero-decimal
-  currency. → [`AGENTS.md`](../AGENTS.md) §1, commit `cdece63`
-- **`Currency` is an open string code; `Dataset.currencies` is the authority.**
-  Rejected a closed union, which would have made "add a currency" a code change.
-  The compile-time safety is replaced by validation at the boundaries —
-  `parseDatasetJson` rejects a code no currency defines.
+  default of 2: it is correct while the decimals setting is 2, so a missed call
+  site would pass every test and fail the moment it moves.
+  → [`AGENTS.md`](../AGENTS.md) §1, commit `cdece63`
+- **Decimal places are ONE dataset-wide setting, not per currency.**
+  `Settings.digits`; `CurrencyDef.digits` is gone. Chosen over a per-currency
+  default and over display-only rounding, and knowingly over correctness for
+  mixed minor units: a dataset holding both yen and kroner can no longer be
+  described, and the app does not warn. The owner asked for the simpler model
+  with that trade-off in front of them.
+  → [`specs/2026-09-02-global-decimals-design.md`](specs/2026-09-02-global-decimals-design.md)
+- **`Currency` is an open string code; `Dataset.currencies` is the authority**
+  on which codes exist, their names and their symbols — but no longer on their
+  decimals. Rejected a closed union, which would have made "add a currency" a
+  code change. The compile-time safety is replaced by validation at the
+  boundaries — `parseDatasetJson` rejects a code no currency defines.
   → `src/domain/types.ts`, commit `cdece63`
 - **Every derived number comes from one left fold.** `src/domain/fold.ts` is the
   only implementation; year and summary views aggregate over it rather than

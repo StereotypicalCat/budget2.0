@@ -4,10 +4,13 @@ import type { Dataset, Post, Purchase } from "./types.ts";
 
 /** Digits for the currencies these tests use; all real-world 2dp. */
 const TEST_CURRENCIES = [
-  { code: "DKK", digits: 2, symbol: "kr" },
-  { code: "USD", digits: 2, symbol: "$" },
-  { code: "EUR", digits: 2, symbol: "\u20ac" },
+  { code: "DKK", symbol: "kr" },
+  { code: "USD", symbol: "$" },
+  { code: "EUR", symbol: "\u20ac" },
 ];
+
+/** The dataset\'s decimal places; every currency rounds to this. */
+const DIGITS = 2;
 
 function post(id: string, order: number, percent: number, archived = false): Post {
   return {
@@ -33,7 +36,7 @@ function spend(id: string, postId: string, amount: number, date: string): Purcha
 }
 
 const data: Dataset = {
-  settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 1 },
+  settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 1, digits: DIGITS },
   currencies: TEST_CURRENCIES,
   fxRates: [],
   posts: [post("food", 0, 20), post("games", 1, 10)],

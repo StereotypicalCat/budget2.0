@@ -1,5 +1,4 @@
 import { allocationFor } from "./allocation.ts";
-import { digitsFor } from "./currencies.ts";
 import { chargesForMonth } from "./charges.ts";
 import { roundMoney } from "./money.ts";
 import { compareMonths, monthRange } from "./months.ts";
@@ -37,7 +36,7 @@ export type Fold = Map<MonthId, Map<PostId, PostMonthFigures>>;
  */
 export function foldBalances(dataset: Dataset, upToMonth: MonthId): Fold {
   const { foldStartMonth, baseCurrency } = dataset.settings;
-  const baseDigits = digitsFor(dataset.currencies, baseCurrency);
+  const baseDigits = dataset.settings.digits;
   const fold: Fold = new Map();
 
   if (compareMonths(upToMonth, foldStartMonth) < 0) return fold;

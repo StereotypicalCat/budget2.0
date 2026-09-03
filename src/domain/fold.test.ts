@@ -4,10 +4,13 @@ import type { Dataset, Post, Purchase } from "./types.ts";
 
 /** Digits for the currencies these tests use; all real-world 2dp. */
 const TEST_CURRENCIES = [
-  { code: "DKK", digits: 2, symbol: "kr" },
-  { code: "USD", digits: 2, symbol: "$" },
-  { code: "EUR", digits: 2, symbol: "\u20ac" },
+  { code: "DKK", symbol: "kr" },
+  { code: "USD", symbol: "$" },
+  { code: "EUR", symbol: "\u20ac" },
 ];
+
+/** The dataset\'s decimal places; every currency rounds to this. */
+const DIGITS = 2;
 
 function post(id: string, fixed: number, archived = false): Post {
   return {
@@ -34,7 +37,7 @@ function spend(id: string, postId: string, amount: number, date: string): Purcha
 
 function dataset(posts: Post[], purchases: Purchase[]): Dataset {
   return {
-    settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 1 },
+    settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 1, digits: DIGITS },
     currencies: TEST_CURRENCIES,
     fxRates: [],
     posts,
@@ -139,7 +142,7 @@ test("percentage allocations follow the month's income", () => {
 test("months before foldStartMonth contribute nothing", () => {
   const data: Dataset = {
     ...dataset([post("food", 500)], [spend("a", "food", 5000, "2025-06-01")]),
-    settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 1 },
+    settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 1, digits: DIGITS },
   };
   const fold = foldBalances(data, "2026-01");
   expect(fold.has("2025-06")).toBe(false);

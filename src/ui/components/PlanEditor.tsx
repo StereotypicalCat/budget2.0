@@ -1,9 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { useDataset } from "../hooks/useDataset.ts";
-import { digitsFor } from "../../domain/currencies.ts";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatAmount } from "../format.ts";
+import { useMoneyFormat } from "../hooks/useMoneyFormat.ts";
 import {
   planBalance,
   setSliceAmount,
@@ -32,7 +31,8 @@ function hasValidDate(draft: PurchaseDraft): boolean {
 export function PlanEditor({ draft, onChange }: Props) {
   // The purchase's own currency decides the rounding, not the base currency:
   // a plan for a JPY purchase must divide into whole yen.
-  const digits = digitsFor(useDataset().currencies, draft.currency);
+  const digits = useDataset().settings.digits;
+  const fmt = useMoneyFormat();
   const balance = planBalance(draft, digits);
 
   if (!draft.plan) {
@@ -105,8 +105,8 @@ export function PlanEditor({ draft, onChange }: Props) {
 
       <p className={`text-xs ${balance === 0 ? "text-muted-foreground" : ""}`}>
         {balance === 0
-          ? `Slices total ${formatAmount(draft.amount)} ${draft.currency}, matching the purchase.`
-          : `Slices are ${formatAmount(Math.abs(balance))} ${draft.currency} ${
+          ? `Slices total ${fmt.amount(draft.amount)} ${draft.currency}, matching the purchase.`
+          : `Slices are ${fmt.amount(Math.abs(balance))} ${draft.currency} ${
               balance > 0 ? "short of" : "over"
             } the purchase total.`}
       </p>

@@ -12,7 +12,7 @@ import { setIncome, deletePurchase, setRuleFrom } from "../../store/actions.ts";
 import { ruleAt } from "../../domain/allocation.ts";
 import type { MonthId, Post, Purchase, Rule } from "../../domain/types.ts";
 import { sliceAmountForMonth } from "../../domain/charges.ts";
-import { formatMoney, formatSignedMoney } from "../format.ts";
+import { useMoneyFormat } from "../hooks/useMoneyFormat.ts";
 import { PostTable, PostTableLegend } from "../components/PostTable.tsx";
 import { PurchaseDialog } from "../components/PurchaseDialog.tsx";
 import { Meter } from "../components/Meter.tsx";
@@ -21,6 +21,7 @@ import { allocatedPercentOfIncome, allocationMeterSegments } from "../meterSegme
 import { groupPurchasesByDate } from "../purchaseGroups.ts";
 
 export function MonthRoute() {
+  const fmt = useMoneyFormat();
   const { monthId = "" } = useParams();
   const dataset = useDataset();
   const { mutate, error, clearError } = useMutate();
@@ -85,7 +86,7 @@ export function MonthRoute() {
           </div>
           <div className="min-w-0 flex-1 space-y-2">
             <dl className="flex flex-wrap gap-x-10 gap-y-4">
-              <Stat label="Allocated">{formatMoney(view.totalAllocation, base)}</Stat>
+              <Stat label="Allocated">{fmt.money(view.totalAllocation, base)}</Stat>
               <Stat
                 label="Unallocated"
                 tone={view.unallocated < 0 ? "overspend" : "default"}
@@ -95,7 +96,7 @@ export function MonthRoute() {
                     : undefined
                 }
               >
-                {formatSignedMoney(view.unallocated, base)}
+                {fmt.signedMoney(view.unallocated, base)}
               </Stat>
             </dl>
             <Meter
@@ -108,7 +109,7 @@ export function MonthRoute() {
 
         <div className="mt-4 flex flex-wrap items-end justify-between gap-x-10 gap-y-2 border-t border-budget-rule pt-3">
           <dl>
-            <Stat label="Spent">{formatMoney(view.totalCharges, base)}</Stat>
+            <Stat label="Spent">{fmt.money(view.totalCharges, base)}</Stat>
           </dl>
           {/* Rendered in both directions. "No posts overspent" is a real answer
               to the app's second question, and a line that only appears when
@@ -189,6 +190,7 @@ function PurchaseRow({
   monthId: MonthId;
   onDelete: () => void;
 }) {
+  const fmt = useMoneyFormat();
   const slice = sliceAmountForMonth(purchase, monthId)!;
   return (
     // `-mx-2 px-2` rather than `px-1`: the row's text now starts exactly where
@@ -221,7 +223,7 @@ function PurchaseRow({
           </span>
         )}
         <span className="font-money shrink-0 tabular-nums">
-          {formatMoney(slice.amount, slice.currency)}
+          {fmt.money(slice.amount, slice.currency)}
         </span>
 
         {/* From `sm:` up: revealed on hover, and held at a fixed width so

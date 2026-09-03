@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
-import { formatAmount, formatSignedAmount } from "../format.ts";
+import { useMoneyFormat, type MoneyFormat } from "../hooks/useMoneyFormat.ts";
 import { ruleAt } from "../../domain/allocation.ts";
 import { carryMeterSegments, type MeterSegment } from "../meterSegments.ts";
 import { Meter } from "./Meter.tsx";
@@ -41,18 +41,23 @@ interface RowCells {
   segments: MeterSegment[];
 }
 
-function postRowCells({ figures }: MonthPostRow): RowCells {
+/**
+ * Takes the formatter as an argument rather than calling the hook: this is a
+ * plain function, not a component, and both table markups call it from inside
+ * a map.
+ */
+function postRowCells({ figures }: MonthPostRow, fmt: MoneyFormat): RowCells {
   return {
-    carriedIn: formatSignedAmount(figures.carriedIn),
+    carriedIn: fmt.signedAmount(figures.carriedIn),
     carriedInTone:
       figures.carriedIn > 0
         ? "text-surplus"
         : figures.carriedIn < 0
           ? "text-overspend"
           : "",
-    allocation: formatAmount(figures.allocation),
-    charges: formatAmount(figures.charges),
-    remaining: formatSignedAmount(figures.remaining),
+    allocation: fmt.amount(figures.allocation),
+    charges: fmt.amount(figures.charges),
+    remaining: fmt.signedAmount(figures.remaining),
     remainingTone: figures.remaining < 0 ? "text-overspend" : "",
     segments: carryMeterSegments(figures),
   };
@@ -161,6 +166,7 @@ function ChangeRuleButton({
 }
 
 export function PostTable({ monthId, rows, onChangeRule }: Props) {
+  const fmt = useMoneyFormat();
   return (
     <>
       <div className="hidden overflow-x-auto sm:block">
@@ -180,7 +186,7 @@ export function PostTable({ monthId, rows, onChangeRule }: Props) {
               belong together, which is exactly how the meter came to look like
               a divider between two rows rather than part of one. */}
           {rows.map((row) => {
-            const cells = postRowCells(row);
+            const cells = postRowCells(row, fmt);
             return (
               <tbody key={row.post.id} className="group">
                 <tr className="transition-colors group-hover:bg-accent/60">
@@ -224,7 +230,7 @@ export function PostTable({ monthId, rows, onChangeRule }: Props) {
 
       <ul className="space-y-4 sm:hidden">
         {rows.map((row) => {
-          const cells = postRowCells(row);
+          const cells = postRowCells(row, fmt);
           return (
             <li key={row.post.id} className="space-y-1.5">
               <div className="flex items-baseline justify-between gap-3 text-sm">
