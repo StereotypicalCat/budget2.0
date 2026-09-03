@@ -214,10 +214,14 @@ already flow through it.
 
 One extraction pays for itself: the split-distribution half of
 `chargesForPurchaseInMonth` becomes a shared helper taking
-`(amount, splits, splitMode, ...)`, called by both real charges and expected
-ones. Without it the two paths could round differently or absorb the remainder
-differently, and the difference would show up as a penny of phantom drift
-between the tracks.
+`(amount, splits, splitMode, index, baseCurrency, rates, digits)`, called by
+both real charges and expected ones. Without it the two paths could round
+differently or absorb the remainder differently, and the difference would show
+up as a penny of phantom drift between the tracks.
+
+The decimals change (`8d2b2ca`) made this smaller than it would have been:
+`chargesForPurchaseInMonth` already takes `digits: number` rather than a
+currency table, so the helper needs no currency plumbing at all.
 
 `PostMonthFigures` gains three fields, and `foldBalances` runs two accumulators
 over its existing loop:
@@ -227,8 +231,8 @@ remaining = carriedIn          + allocation - charges
 projected = projectedCarriedIn + allocation - charges - expected
 ```
 
-Both are rounded with the same base digits, in the same place, as `remaining`
-is today.
+Both are rounded to `dataset.settings.digits`, in the same place, as
+`remaining` is today.
 
 Two invariants keep this honest, and both are tests:
 
@@ -237,7 +241,7 @@ Two invariants keep this honest, and both are tests:
 - **Once every occurrence in a month is confirmed, the two tracks reconverge
   there.** The past settles; only the future is a forecast.
 
-### 7. Migration 5 -> 6
+### 7. Migration 6 -> 7
 
 One appended step: `recurring: []` on the dataset. Nothing else —
 `Purchase.source` is optional, so no purchase is rewritten.
@@ -249,12 +253,12 @@ so every existing dataset folds to the same `remaining` it did before, and
 The step writes a literal `[]` and reads no live default, so the
 no-live-default guard is satisfied with nothing to freeze.
 
-> **Ordering, settled.** `docs/specs/2026-09-02-global-decimals-design.md`
-> originally claimed 6 as well. Recurring costs take 6; that change becomes
-> 6 -> 7 and its spec has been updated to say so. The two steps are independent
-> — this one writes `recurring: []`, that one rewrites where digits live — so
-> they compose in either implementation order as long as the version numbers
-> stay as assigned here.
+> **Ordering, resolved by what shipped.** Both this spec and
+> `2026-09-02-global-decimals-design.md` were drafted claiming schema 6. The
+> decimals change landed first (`8d2b2ca`) and took 6, so this one takes 7.
+> The two steps were always independent — that one moved where digits live,
+> this one writes `recurring: []` — and nothing about their content had to
+> change, only the number.
 
 ### 8. Validation — `export/json.ts`
 
@@ -314,9 +318,13 @@ dialog per bill would defeat it.
 **The overdue count** — unconfirmed occurrences from earlier months — appears in
 that band. §5 is otherwise silent drift.
 
-Two existing rules apply directly to the inline amount field: capture
+Three existing rules apply directly to the inline amount field: capture
 `event.target.value` into a `const` before `mutate` (AGENTS.md §2, the
-deferred-write rule), and route every `store.*` call through `useMutate`.
+deferred-write rule); route every `store.*` call through `useMutate`; and get
+formatters from `useMoneyFormat()` rather than calling `format.ts` directly,
+since display is a rounding boundary and a pinned 2 there is the bug `8d2b2ca`
+fixed. The field itself stays `type="text"` and parses through
+`parseMoneyInput`, so "30$" works the way it does everywhere else.
 
 ### 11. Tests
 
@@ -327,13 +335,14 @@ deferred-write rule), and route every `store.*` call through `useMutate`.
   series rebases to day 42, cap hit again); `endedFrom`; suppression;
   un-confirming by deleting the purchase; and the strictly-increasing throw.
 - **`domain/fold.test.ts`** — the two convergence invariants from §6.
-- **`store/migrations.test.ts`** — 5 -> 6 adds the empty array and moves no
+- **`store/migrations.test.ts`** — 6 -> 7 adds the empty array and moves no
   figure.
 - **`export/json.test.ts`** — acceptance and rejection, including `n: 0`,
   `n: 1.5`, a `weekday` of 7, and an unknown `kind`.
-- **`domain/currencyDigits.test.ts`** — a recurring cost in the zero-decimal
-  currency, so the expected track rounds through the same guard as everything
-  else.
+- **`domain/currencyDigits.test.ts`** — the file now drives the whole dataset
+  at zero decimals and asserts that raising the setting to 2 changes what the
+  fold produces. The `expected` track joins that sweep, so it cannot be the one
+  path that quietly assumes 2.
 
 `scripts/demo-data.ts` seeds a monthly rent and a 28-day subscription, so the
 band is screenshot-verifiable.
@@ -370,7 +379,7 @@ band is screenshot-verifiable.
 
 ## If this needs undoing
 
-Deleting `Dataset.recurring` and the `expected` / `projected` fields is a 6 -> 7
+Deleting `Dataset.recurring` and the `expected` / `projected` fields is a 7 -> 8
 migration that loses no ledger data — every confirmed occurrence is already an
 ordinary `Purchase` and stays one, with a dangling `source` that validation
 would then ignore. The reverse of §7, plus dropping two modules.
@@ -402,7 +411,7 @@ dropping the second balance means deleting three fields from
 - **AGENTS.md §2** — the termination guard, and why `n >= 1` is rejected rather
   than clamped.
 - **docs/DECISIONS.md** — a new "Recurring costs" heading pointing here, and
-  "Now at version 5" becomes 6.
+  "Now at version 6" becomes 7.
 - **docs/PRODUCT.md** — the capability list and the terminology section gain
   the concept.
 - **docs/ARCHITECTURE.md** — the layer diagram and the derived-values list gain
