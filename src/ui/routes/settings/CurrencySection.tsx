@@ -92,7 +92,15 @@ export function CurrencySection() {
         </NativeSelect>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* `-mr-2 pr-2`, not a bare `overflow-x-auto`: the row's remove button
+          carries `-mr-2` so its label sits flush with the card's content edge
+          rather than 8px inside it. That overhang is 8px of overflow to a
+          scroll container, and since the table is `w-full` it scaled with the
+          column — so the horizontal scrollbar appeared at every width and no
+          amount of widening removed it. Bleeding the scroll box 8px right and
+          padding it back puts the overhang inside the padding box: same table
+          width, same button position, no scrollbar. */}
+      <div className="-mr-2 overflow-x-auto pr-2">
         <table className="w-full min-w-[42rem] text-sm">
           <thead className="text-left">
             <tr className="border-b border-budget-rule text-[0.6875rem] uppercase tracking-wider text-budget-ink-muted">
