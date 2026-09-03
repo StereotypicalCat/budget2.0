@@ -219,6 +219,7 @@ describe("chargesForMonth", () => {
         purchase({ id: "b", total: { amount: 50, currency: "DKK" } }),
         purchase({ id: "c", date: "2026-10-01" }),
       ],
+      recurring: [],
     };
     const charges = chargesForMonth(data, "2026-09");
     expect(charges.get("food")).toBe(250);
@@ -233,6 +234,7 @@ describe("chargesForMonth", () => {
       posts: [],
       months: [],
       purchases: [],
+      recurring: [],
     };
     expect(chargesForMonth(data, "2026-09").size).toBe(0);
   });

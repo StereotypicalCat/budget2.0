@@ -109,6 +109,7 @@ describe("the fold at zero decimals", () => {
         { id: "2026-02", income: { amount: 10_000, currency: "JPY" }, ruleOverrides: {} },
       ],
       purchases: [],
+      recurring: [],
     };
   }
 

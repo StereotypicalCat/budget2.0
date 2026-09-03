@@ -174,6 +174,25 @@ const MIGRATIONS: Array<(data: any) => any> = [
       currencies: currencies.map(({ digits, ...rest }: any) => rest),
     };
   },
+
+  // 6 -> 7: recurring costs join the dataset.
+  //
+  // Behaviour-preserving by construction, and more strongly than most: an
+  // empty array projects no occurrences, so `expected` is zero everywhere and
+  // `projected` equals `remaining` in every month of every existing dataset.
+  // Not one stored figure is read, let alone written.
+  //
+  // An existing `recurring` field is left alone rather than overwritten, for
+  // the same reason the 2 -> 3 step leaves `currencies` alone: a hand-edited
+  // file could already carry them, and discarding them would be data loss.
+  //
+  // Nothing is frozen here because nothing is copied — the step writes a
+  // literal empty array and reads no default, live or otherwise.
+  (data: any) => ({
+    ...data,
+    settings: { ...data.settings, schemaVersion: 7 },
+    recurring: Array.isArray(data.recurring) ? data.recurring : [],
+  }),
 ];
 
 export function migrate(raw: unknown): Dataset {

@@ -47,6 +47,7 @@ function dataset(posts: Post[], purchases: Purchase[]): Dataset {
       { id: "2026-03", income: { amount: 10000, currency: "DKK" }, ruleOverrides: {} },
     ],
     purchases,
+    recurring: [],
   };
 }
 

@@ -49,6 +49,7 @@ const data: Dataset = {
     },
   ],
   purchases: [spend("a", "food", 500, "2026-01-10"), spend("b", "games", 300, "2026-02-10")],
+  recurring: [],
 };
 
 describe("monthView", () => {

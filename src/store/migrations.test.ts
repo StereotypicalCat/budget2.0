@@ -1,6 +1,7 @@
 import { test, expect, describe } from "bun:test";
 import { SCHEMA_VERSION, createSeedDataset } from "../domain/seed.ts";
 import { migrate, UnsupportedSchemaError } from "./migrations.ts";
+import { figuresFor, foldBalances } from "../domain/fold.ts";
 
 describe("migrate", () => {
   test("passes a current-version dataset through unchanged", () => {
@@ -442,4 +443,53 @@ test("no migration step imports a live default that a later commit could change"
     live.some((name) => new RegExp(`\\b${name}\\b`).test(binding)),
   );
   expect(offenders).toEqual([]);
+});
+
+describe("6 -> 7: recurring costs join the dataset", () => {
+  test("a v6 dataset gains an empty recurring array", () => {
+    const v6 = { ...createSeedDataset("2026-09"), recurring: undefined };
+    delete (v6 as any).recurring;
+    (v6 as any).settings = { ...v6.settings, schemaVersion: 6 };
+
+    const migrated = migrate(v6 as any);
+
+    expect(migrated.recurring).toEqual([]);
+    expect(migrated.settings.schemaVersion).toBe(SCHEMA_VERSION);
+  });
+
+  test("recurring costs the owner already has are left alone", () => {
+    // A hand-edited file could already carry them; discarding would be data loss.
+    // Typed loosely on purpose: a hand-edited entry is not guaranteed to be a
+    // fully-shaped RecurringCost either, and this step must preserve it as-is
+    // regardless.
+    const existing: any[] = [{ id: "r1", name: "Rent" }];
+    const v6: any = { ...createSeedDataset("2026-09"), recurring: existing };
+    v6.settings = { ...v6.settings, schemaVersion: 6 };
+
+    expect(migrate(v6).recurring).toEqual(existing);
+  });
+
+  test("NO figure changes: every post in every month folds identically", () => {
+    const v6: any = { ...createSeedDataset("2026-09"), settings: { ...createSeedDataset("2026-09").settings, schemaVersion: 6 } };
+    delete v6.recurring;
+
+    const migrated = migrate(v6);
+    const fold = foldBalances(migrated, "2026-12");
+
+    for (const post of migrated.posts) {
+      for (const month of ["2026-09", "2026-10", "2026-11", "2026-12"]) {
+        const figures = figuresFor(fold, post.id, month);
+        // `projected` and `expected` don't exist on PostMonthFigures until
+        // Task 5 adds them — this is the deliberate known-red guard the task
+        // brief calls for. The ts-expect-error, not a weaker cast, means this
+        // line breaks loudly (as an unused-suppression compile error) the
+        // moment Task 5 lands the fields, forcing it to be revisited rather
+        // than silently starting to pass.
+        // @ts-expect-error PostMonthFigures gains `projected` in Task 5.
+        expect(figures.projected).toBe(figures.remaining);
+        // @ts-expect-error PostMonthFigures gains `expected` in Task 5.
+        expect(figures.expected).toBe(0);
+      }
+    }
+  });
 });
