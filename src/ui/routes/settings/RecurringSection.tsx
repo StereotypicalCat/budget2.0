@@ -55,7 +55,7 @@ export function RecurringSection() {
     return (
       <div className="flex items-center gap-1">
         <Input
-          className="h-8 w-14"
+          className="h-8 w-20"
           type="number"
           min={1}
           step={1}
