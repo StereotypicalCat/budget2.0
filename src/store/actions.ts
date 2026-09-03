@@ -7,6 +7,7 @@ import type {
   CurrencyDef,
   Dataset,
   FxRate,
+  IsoDate,
   Money,
   Month,
   MonthId,
@@ -14,6 +15,9 @@ import type {
   PostId,
   Purchase,
   PurchaseId,
+  Recurrence,
+  RecurringCost,
+  RecurringCostId,
   Rule,
   RuleVersion,
   Schedule,
@@ -361,4 +365,142 @@ export function setDigits(draft: Dataset, digits: number): void {
 export function setBaseCurrency(draft: Dataset, currency: Currency): void {
   draft.settings.baseCurrency = currency;
   draft.fxRates = draft.fxRates.filter((r) => r.currency !== currency);
+}
+
+function requireRecurringCost(draft: Dataset, id: RecurringCostId): RecurringCost {
+  const cost = draft.recurring.find((c) => c.id === id);
+  if (!cost) throw new Error(`Unknown recurring cost: ${id}`);
+  return cost;
+}
+
+/**
+ * The projection walk in `domain/occurrences.ts` terminates only if every step
+ * strictly advances, and `n` is what guarantees that. The JSON importer checks
+ * the same thing; this is the other write path, and both have to hold or the
+ * fold can hang.
+ */
+function requireRecurrence(recurrence: Recurrence): Recurrence {
+  if (!Number.isInteger(recurrence.n)) {
+    throw new Error(`A recurrence interval must be a whole number, not ${recurrence.n}`);
+  }
+  if (recurrence.n < 1) {
+    throw new Error(`A recurrence interval must be at least 1, not ${recurrence.n}`);
+  }
+  if (recurrence.kind === "everyNWeeks") {
+    if (!Number.isInteger(recurrence.weekday) || recurrence.weekday < 0 || recurrence.weekday > 6) {
+      throw new Error(`A weekday must be 0-6 (0 is Sunday), not ${recurrence.weekday}`);
+    }
+  }
+  return recurrence;
+}
+
+export function addRecurringCost(
+  draft: Dataset,
+  cost: Omit<RecurringCost, "id" | "order">,
+): RecurringCost {
+  const created: RecurringCost = {
+    ...cost,
+    id: newId(),
+    order: draft.recurring.length,
+    recurrence: requireRecurrence(cost.recurrence),
+    amount: roundMoneyValue(draft, cost.amount),
+    splits: roundSplits(draft, cost.splits, cost.splitMode, cost.amount.currency),
+  };
+  draft.recurring.push(created);
+  return created;
+}
+
+export function updateRecurringCost(
+  draft: Dataset,
+  id: RecurringCostId,
+  changes: Partial<Omit<RecurringCost, "id">>,
+): void {
+  const cost = requireRecurringCost(draft, id);
+  const resolved: Partial<Omit<RecurringCost, "id">> = { ...changes };
+
+  if (changes.recurrence) {
+    resolved.recurrence = requireRecurrence(changes.recurrence);
+  }
+  if (changes.amount) {
+    resolved.amount = roundMoneyValue(draft, changes.amount);
+  }
+  if (changes.splits) {
+    // Either field may be absent from a partial update; the stored cost
+    // supplies whichever one is, so the mode and currency always agree with
+    // the values being rounded.
+    resolved.splits = roundSplits(
+      draft,
+      changes.splits,
+      changes.splitMode ?? cost.splitMode,
+      (resolved.amount ?? cost.amount).currency,
+    );
+  }
+
+  Object.assign(cost, resolved);
+}
+
+export function moveRecurringCost(
+  draft: Dataset,
+  id: RecurringCostId,
+  direction: -1 | 1,
+): void {
+  const ordered = [...draft.recurring].sort((a, b) => a.order - b.order);
+  const index = ordered.findIndex((c) => c.id === id);
+  const target = index + direction;
+  if (index === -1 || target < 0 || target >= ordered.length) return;
+  const a = ordered[index]!;
+  const b = ordered[target]!;
+  [a.order, b.order] = [b.order, a.order];
+}
+
+/**
+ * Stops a bill from `from` onward and hides it from the list.
+ *
+ * Both fields, because they mean different things: `endedFrom` stops the
+ * PROJECTION, and `archived` only hides the row. Archiving alone would leave
+ * the bill projecting forever; setting `endedFrom` alone would leave a dead
+ * bill cluttering the list. Neither touches a past occurrence, so no
+ * historical figure moves.
+ */
+export function endRecurringCost(draft: Dataset, id: RecurringCostId, from: IsoDate): void {
+  const cost = requireRecurringCost(draft, id);
+  cost.endedFrom = from;
+  cost.archived = true;
+}
+
+export function restoreRecurringCost(draft: Dataset, id: RecurringCostId): void {
+  const cost = requireRecurringCost(draft, id);
+  delete cost.endedFrom;
+  cost.archived = false;
+}
+
+/**
+ * Turns one projected occurrence into a real purchase.
+ *
+ * `occurrenceDate` is the slot being claimed and goes into `source`;
+ * `overrides.date` is when the money actually moved and goes on the purchase.
+ * They differ whenever a bill is paid off schedule, and under `lastCharge`
+ * anchoring it is the latter that rebases the series — which is the whole of
+ * the phone-bill behaviour.
+ *
+ * Deleting the purchase later un-confirms the slot, with nothing to reconcile.
+ */
+export function confirmOccurrence(
+  draft: Dataset,
+  recurringId: RecurringCostId,
+  occurrenceDate: IsoDate,
+  overrides: { date?: IsoDate; amount?: Money } = {},
+): Purchase {
+  const cost = requireRecurringCost(draft, recurringId);
+  return addPurchase(draft, {
+    date: overrides.date ?? occurrenceDate,
+    description: cost.name,
+    total: overrides.amount ?? cost.amount,
+    splitMode: cost.splitMode,
+    // Copied, not shared: editing the purchase's splits must not rewrite the
+    // cost's, and `mutate` clones the draft rather than deep-freezing it.
+    splits: cost.splits.map((split) => ({ ...split })),
+    schedule: null,
+    source: { recurringId, occurrenceDate },
+  });
 }

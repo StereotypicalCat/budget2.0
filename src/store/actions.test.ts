@@ -453,3 +453,157 @@ describe("split values are rounded by what they MEAN", () => {
     });
   });
 });
+
+describe("recurring costs", () => {
+  function draft(): Dataset {
+    const data = createSeedDataset("2026-01");
+    data.posts[0]!.id = "housing";
+    return data;
+  }
+
+  const rentInput = {
+    name: "Rent",
+    archived: false,
+    amount: { amount: 8000, currency: "DKK" },
+    startDate: "2026-01",
+    recurrence: { kind: "everyNMonths" as const, n: 1 },
+    anchoring: "calendar" as const,
+    splitMode: "percent" as const,
+    splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+  };
+
+  test("adding assigns an id and an order", () => {
+    const data = draft();
+    const first = actions.addRecurringCost(data, rentInput);
+    const second = actions.addRecurringCost(data, { ...rentInput, name: "Phone" });
+
+    expect(first.id).not.toBe(second.id);
+    expect(first.order).toBe(0);
+    expect(second.order).toBe(1);
+    expect(data.recurring.length).toBe(2);
+  });
+
+  test("the amount is rounded to the dataset's digits before it lands", () => {
+    const data = draft();
+    data.settings.digits = 0;
+    const cost = actions.addRecurringCost(data, { ...rentInput, amount: { amount: 8000.7, currency: "DKK" } });
+    expect(cost.amount.amount).toBe(8001);
+  });
+
+  test("a recurrence with n below 1 is refused", () => {
+    // The projection walk terminates only if every step advances, and the
+    // importer is not the only write path.
+    const data = draft();
+    expect(() => actions.addRecurringCost(data, { ...rentInput, recurrence: { kind: "everyNDays", n: 0 } }))
+      .toThrow(/at least 1/);
+    expect(() => actions.addRecurringCost(data, { ...rentInput, recurrence: { kind: "everyNDays", n: 1.5 } }))
+      .toThrow(/whole number/);
+  });
+
+  test("a weekday outside 0-6 is refused", () => {
+    const data = draft();
+    expect(() =>
+      actions.addRecurringCost(data, { ...rentInput, recurrence: { kind: "everyNWeeks", n: 1, weekday: 7 } }),
+    ).toThrow(/weekday/);
+  });
+
+  test("updating validates the new recurrence too", () => {
+    const data = draft();
+    const cost = actions.addRecurringCost(data, rentInput);
+    expect(() =>
+      actions.updateRecurringCost(data, cost.id, { recurrence: { kind: "everyNDays", n: 0 } }),
+    ).toThrow(/at least 1/);
+  });
+
+  test("ending sets both endedFrom and archived", () => {
+    const data = draft();
+    const cost = actions.addRecurringCost(data, rentInput);
+    actions.endRecurringCost(data, cost.id, "2026-06");
+
+    expect(data.recurring[0]!.endedFrom).toBe("2026-06");
+    expect(data.recurring[0]!.archived).toBe(true);
+  });
+
+  test("restoring clears both", () => {
+    const data = draft();
+    const cost = actions.addRecurringCost(data, rentInput);
+    actions.endRecurringCost(data, cost.id, "2026-06");
+    actions.restoreRecurringCost(data, cost.id);
+
+    expect(data.recurring[0]!.endedFrom).toBeUndefined();
+    expect(data.recurring[0]!.archived).toBe(false);
+  });
+
+  test("moving swaps order with its neighbour", () => {
+    const data = draft();
+    const first = actions.addRecurringCost(data, rentInput);
+    const second = actions.addRecurringCost(data, { ...rentInput, name: "Phone" });
+    actions.moveRecurringCost(data, second.id, -1);
+
+    expect(data.recurring.find((c) => c.id === second.id)!.order).toBe(0);
+    expect(data.recurring.find((c) => c.id === first.id)!.order).toBe(1);
+  });
+});
+
+describe("confirmOccurrence", () => {
+  function draft(): Dataset {
+    const data = createSeedDataset("2026-01");
+    data.posts[0]!.id = "housing";
+    actions.addRecurringCost(data, {
+      name: "Rent",
+      archived: false,
+      amount: { amount: 8000, currency: "DKK" },
+      startDate: "2026-01",
+      recurrence: { kind: "everyNMonths", n: 1 },
+      anchoring: "calendar",
+      splitMode: "percent",
+      splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+    });
+    return data;
+  }
+
+  test("writes an ordinary purchase carrying the slot it claims", () => {
+    const data = draft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-03");
+
+    expect(purchase.source).toEqual({ recurringId: data.recurring[0]!.id, occurrenceDate: "2026-03" });
+    expect(purchase.date).toBe("2026-03");
+    expect(purchase.total).toEqual({ amount: 8000, currency: "DKK" });
+    expect(purchase.description).toBe("Rent");
+    expect(purchase.schedule).toBeNull();
+    expect(data.purchases.length).toBe(1);
+  });
+
+  test("the purchase date may differ from the slot — this is the data-cap case", () => {
+    const data = draft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-03", { date: "2026-02-12" });
+
+    expect(purchase.source!.occurrenceDate).toBe("2026-03");
+    expect(purchase.date).toBe("2026-02-12");
+  });
+
+  test("an overridden amount is what gets recorded", () => {
+    const data = draft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-03", {
+      amount: { amount: 8250, currency: "DKK" },
+    });
+    expect(purchase.total.amount).toBe(8250);
+  });
+
+  test("the month the purchase lands in is created, so income can be entered", () => {
+    const data = draft();
+    actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-05");
+    expect(data.months.some((m) => m.id === "2026-05")).toBe(true);
+  });
+
+  test("splits are copied, not shared with the cost", () => {
+    const data = draft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-03");
+    purchase.splits[0]!.value = 50;
+    expect(data.recurring[0]!.splits[0]!.value).toBe(100);
+  });
+
+  test("an unknown cost throws", () => {
+    expect(() => actions.confirmOccurrence(draft(), "nope", "2026-03")).toThrow(/Unknown recurring cost/);
+  });
+});
