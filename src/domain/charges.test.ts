@@ -4,9 +4,11 @@ import {
   sliceAmountForMonth,
   chargesForPurchaseInMonth,
   chargesForMonth,
+  expectedForMonth,
 } from "./charges.ts";
 import { roundMoney } from "./money.ts";
-import type { Dataset, FxRate, Purchase } from "./types.ts";
+import { occurrencesByMonth } from "./occurrences.ts";
+import type { Dataset, FxRate, Purchase, RecurringCost } from "./types.ts";
 
 /** Digits for the currencies these tests use; all real-world 2dp. */
 const TEST_CURRENCIES = [
@@ -237,5 +239,97 @@ describe("chargesForMonth", () => {
       recurring: [],
     };
     expect(chargesForMonth(data, "2026-09").size).toBe(0);
+  });
+});
+
+describe("expectedForMonth", () => {
+  function dataset(cost: RecurringCost, purchases: Purchase[] = []): Dataset {
+    return {
+      settings: { baseCurrency: "DKK", foldStartMonth: "2026-01", schemaVersion: 7, digits: 2 },
+      currencies: [
+        { code: "DKK", symbol: "kr", name: "Danish krone" },
+        { code: "USD", symbol: "$", name: "US dollar" },
+      ],
+      fxRates: [{ currency: "USD", baseUnitsPerOne: 7, updatedAt: "2026-01-01", source: "manual" }],
+      posts: [],
+      months: [],
+      purchases,
+      recurring: [cost],
+    };
+  }
+
+  const rent: RecurringCost = {
+    id: "r1",
+    name: "Rent",
+    order: 0,
+    archived: false,
+    amount: { amount: 8000, currency: "DKK" },
+    startDate: "2026-01",
+    recurrence: { kind: "everyNMonths", n: 1 },
+    anchoring: "calendar",
+    splitMode: "percent",
+    splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+  };
+
+  test("an unconfirmed occurrence charges its post", () => {
+    const data = dataset(rent);
+    const expected = expectedForMonth(data, occurrencesByMonth(data, "2026-01").get("2026-01")!);
+    expect(expected.get("housing")).toBe(8000);
+  });
+
+  test("a CONFIRMED occurrence contributes nothing — it is a real purchase now", () => {
+    const confirmed: Purchase = {
+      id: "p1",
+      date: "2026-01",
+      description: "Rent",
+      total: { amount: 8000, currency: "DKK" },
+      splitMode: "percent",
+      splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+      schedule: null,
+      source: { recurringId: "r1", occurrenceDate: "2026-01" },
+    };
+    const data = dataset(rent, [confirmed]);
+    const expected = expectedForMonth(data, occurrencesByMonth(data, "2026-01").get("2026-01")!);
+    expect(expected.get("housing")).toBeUndefined();
+  });
+
+  test("a split cost divides exactly, with the remainder absorbed", () => {
+    const split = {
+      ...rent,
+      amount: { amount: 1000, currency: "DKK" },
+      splits: [
+        { postId: "a", value: 33.333, absorbsRemainder: false },
+        { postId: "b", value: 33.333, absorbsRemainder: false },
+        { postId: "c", value: 33.334, absorbsRemainder: true },
+      ],
+    };
+    const data = dataset(split);
+    const expected = expectedForMonth(data, occurrencesByMonth(data, "2026-01").get("2026-01")!);
+    const total = ["a", "b", "c"].reduce((sum, id) => sum + expected.get(id)!, 0);
+    expect(total).toBe(1000);
+  });
+
+  test("a foreign-currency cost converts to base", () => {
+    const inUsd = { ...rent, amount: { amount: 15, currency: "USD" } };
+    const data = dataset(inUsd);
+    const expected = expectedForMonth(data, occurrencesByMonth(data, "2026-01").get("2026-01")!);
+    expect(expected.get("housing")).toBe(105);
+  });
+
+  test("two occurrences in one month sum", () => {
+    const fortnightly = {
+      ...rent,
+      amount: { amount: 100, currency: "DKK" },
+      startDate: "2026-01-05",
+      recurrence: { kind: "everyNDays" as const, n: 14 },
+    };
+    const data = dataset(fortnightly);
+    const january = occurrencesByMonth(data, "2026-01").get("2026-01")!;
+    expect(january.length).toBe(2);
+    expect(expectedForMonth(data, january).get("housing")).toBe(200);
+  });
+
+  test("no occurrences means an empty map, not zeros", () => {
+    expect(expectedForMonth(dataset(rent), []).size).toBe(0);
   });
 });
