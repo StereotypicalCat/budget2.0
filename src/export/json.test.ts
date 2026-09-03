@@ -253,3 +253,142 @@ describe("the decimal-places setting on import", () => {
     expect(out.settings.digits).toBe(2);
   });
 });
+
+describe("recurring cost validation", () => {
+  function withRecurring(recurring: unknown[]): string {
+    const data: any = createSeedDataset("2026-01");
+    data.posts[0].id = "housing";
+    data.recurring = recurring;
+    return JSON.stringify(data);
+  }
+
+  const valid = {
+    id: "r1",
+    name: "Rent",
+    order: 0,
+    archived: false,
+    amount: { amount: 8000, currency: "DKK" },
+    startDate: "2026-01",
+    recurrence: { kind: "everyNMonths", n: 1 },
+    anchoring: "calendar",
+    splitMode: "percent",
+    splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+  };
+
+  test("a well-formed cost is accepted", () => {
+    expect(parseDatasetJson(withRecurring([valid])).recurring.length).toBe(1);
+  });
+
+  test("an undefined currency is refused", () => {
+    expect(() => parseDatasetJson(withRecurring([{ ...valid, amount: { amount: 1, currency: "XYZ" } }])))
+      .toThrow(/Unsupported currency/);
+  });
+
+  test("a malformed start date is refused", () => {
+    expect(() => parseDatasetJson(withRecurring([{ ...valid, startDate: "2026-13" }])))
+      .toThrow(/start date/);
+  });
+
+  test("a malformed endedFrom is refused", () => {
+    expect(() => parseDatasetJson(withRecurring([{ ...valid, endedFrom: "nope" }])))
+      .toThrow(/ended-from date/);
+  });
+
+  test("an interval below 1 is refused, not clamped", () => {
+    // Clamping would silently change the bill's schedule. The walk in
+    // occurrences.ts cannot terminate without this.
+    expect(() => parseDatasetJson(withRecurring([{ ...valid, recurrence: { kind: "everyNDays", n: 0 } }])))
+      .toThrow(/at least 1/);
+  });
+
+  test("a fractional interval is refused", () => {
+    expect(() => parseDatasetJson(withRecurring([{ ...valid, recurrence: { kind: "everyNDays", n: 1.5 } }])))
+      .toThrow(/whole number/);
+  });
+
+  test("an unknown recurrence kind is refused", () => {
+    expect(() => parseDatasetJson(withRecurring([{ ...valid, recurrence: { kind: "everyFullMoon", n: 1 } }])))
+      .toThrow(/unknown kind/);
+  });
+
+  test("a weekday outside 0-6 is refused", () => {
+    expect(() =>
+      parseDatasetJson(withRecurring([{ ...valid, recurrence: { kind: "everyNWeeks", n: 1, weekday: 7 } }])),
+    ).toThrow(/weekday/);
+  });
+
+  test("an unknown anchoring is refused", () => {
+    expect(() => parseDatasetJson(withRecurring([{ ...valid, anchoring: "whenever" }])))
+      .toThrow(/anchoring/);
+  });
+
+  test("splits must have exactly one remainder absorber", () => {
+    expect(() =>
+      parseDatasetJson(withRecurring([{
+        ...valid,
+        splits: [
+          { postId: "housing", value: 50, absorbsRemainder: true },
+          { postId: "housing", value: 50, absorbsRemainder: true },
+        ],
+      }])),
+    ).toThrow(/absorbsRemainder/);
+  });
+
+  test("a split naming an unknown post is refused", () => {
+    expect(() =>
+      parseDatasetJson(withRecurring([{
+        ...valid,
+        splits: [{ postId: "ghost", value: 100, absorbsRemainder: true }],
+      }])),
+    ).toThrow(/unknown post/);
+  });
+
+  test("no splits at all is refused", () => {
+    expect(() => parseDatasetJson(withRecurring([{ ...valid, splits: [] }])))
+      .toThrow(/no splits/);
+  });
+});
+
+describe("Purchase.source validation", () => {
+  function withSource(source: unknown): string {
+    const data: any = createSeedDataset("2026-01");
+    data.posts[0].id = "housing";
+    data.recurring = [];
+    data.purchases = [{
+      id: "p1",
+      date: "2026-01",
+      description: "Rent",
+      total: { amount: 8000, currency: "DKK" },
+      splitMode: "percent",
+      splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+      schedule: null,
+      source,
+    }];
+    return JSON.stringify(data);
+  }
+
+  test("a purchase with no source is fine", () => {
+    const data: any = createSeedDataset("2026-01");
+    data.recurring = [];
+    expect(() => parseDatasetJson(JSON.stringify(data))).not.toThrow();
+  });
+
+  test("a source naming an unknown cost is refused", () => {
+    expect(() => parseDatasetJson(withSource({ recurringId: "ghost", occurrenceDate: "2026-01" })))
+      .toThrow(/unknown recurring cost/);
+  });
+
+  test("a source with a malformed occurrence date is refused", () => {
+    const data: any = JSON.parse(withSource({ recurringId: "r1", occurrenceDate: "nope" }));
+    data.recurring = [{
+      id: "r1", name: "Rent", order: 0, archived: false,
+      amount: { amount: 8000, currency: "DKK" },
+      startDate: "2026-01",
+      recurrence: { kind: "everyNMonths", n: 1 },
+      anchoring: "calendar",
+      splitMode: "percent",
+      splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+    }];
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/occurrence date/);
+  });
+});

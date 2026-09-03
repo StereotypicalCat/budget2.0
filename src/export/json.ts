@@ -36,6 +36,9 @@ const MONTH_ID = /^\d{4}-(0[1-9]|1[0-2])$/;
  */
 const PURCHASE_DATE = /^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/;
 
+const ANCHORINGS = new Set(["calendar", "lastCharge"]);
+const RECURRENCE_KINDS = new Set(["everyNMonths", "everyNDays", "everyNWeeks"]);
+
 /**
  * `Currency` is an open string now, so this — not the type system — is what
  * stops a code the dataset never defined reaching the fold, where it would
@@ -116,6 +119,39 @@ function requireArray(data: Record<string, unknown>, key: string): unknown[] {
     throw new ImportValidationError(`Dataset field "${key}" is missing or not an array`);
   }
   return value;
+}
+
+/**
+ * `n` is checked hard rather than clamped. The projection walk in
+ * `domain/occurrences.ts` terminates only if every step strictly advances, and
+ * a clamped zero would silently give the owner a schedule their file does not
+ * describe. Rejecting tells them the file is wrong; clamping tells them
+ * nothing and quietly changes a bill.
+ */
+function requireRecurrence(recurrence: any, label: string): void {
+  if (!recurrence || !RECURRENCE_KINDS.has(recurrence.kind)) {
+    throw new ImportValidationError(
+      `${label} has a recurrence of unknown kind "${String(recurrence?.kind)}"`,
+    );
+  }
+  if (typeof recurrence.n !== "number" || !Number.isInteger(recurrence.n)) {
+    throw new ImportValidationError(
+      `${label} has a recurrence interval that is not a whole number: ${String(recurrence.n)}`,
+    );
+  }
+  if (recurrence.n < 1) {
+    throw new ImportValidationError(
+      `${label} has a recurrence interval of ${recurrence.n}; it must be at least 1`,
+    );
+  }
+  if (recurrence.kind === "everyNWeeks") {
+    const { weekday } = recurrence;
+    if (typeof weekday !== "number" || !Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+      throw new ImportValidationError(
+        `${label} has a weekday of ${String(weekday)}; it must be 0-6, where 0 is Sunday`,
+      );
+    }
+  }
 }
 
 /**
@@ -210,6 +246,43 @@ export function parseDatasetJson(text: string): Dataset {
     }
   }
 
+  const recurring = Array.isArray(data.recurring) ? (data.recurring as any[]) : [];
+  dataset.recurring = recurring;
+  const recurringIds = new Set(recurring.map((cost: any) => cost.id));
+
+  for (const cost of recurring) {
+    const label = `Recurring cost "${cost.name}"`;
+    requireCurrency(cost.amount?.currency, label, defined);
+
+    if (!PURCHASE_DATE.test(cost.startDate)) {
+      throw new ImportValidationError(`${label} has an invalid start date "${cost.startDate}"`);
+    }
+    if (cost.endedFrom !== undefined && !PURCHASE_DATE.test(cost.endedFrom)) {
+      throw new ImportValidationError(`${label} has an invalid ended-from date "${cost.endedFrom}"`);
+    }
+    requireRecurrence(cost.recurrence, label);
+
+    if (!ANCHORINGS.has(cost.anchoring)) {
+      throw new ImportValidationError(
+        `${label} has an unknown anchoring "${String(cost.anchoring)}"`,
+      );
+    }
+    if (!Array.isArray(cost.splits) || cost.splits.length === 0) {
+      throw new ImportValidationError(`${label} has no splits; at least one split is required`);
+    }
+    const absorbers = cost.splits.filter((s: any) => s.absorbsRemainder).length;
+    if (absorbers !== 1) {
+      throw new ImportValidationError(
+        `${label} has ${absorbers} splits flagged absorbsRemainder; exactly one is required`,
+      );
+    }
+    for (const split of cost.splits) {
+      if (!postIds.has(split.postId)) {
+        throw new ImportValidationError(`${label} references unknown post "${split.postId}"`);
+      }
+    }
+  }
+
   for (const month of dataset.months) {
     if (!MONTH_ID.test(month.id)) {
       throw new ImportValidationError(`Invalid month id "${month.id}"`);
@@ -245,6 +318,19 @@ export function parseDatasetJson(text: string): Dataset {
         throw new ImportValidationError(`${label} has invalid slice month "${slice.month}"`);
       }
       requireCurrency(slice.amount.currency, `${label} slice ${slice.month}`, defined);
+    }
+
+    if (purchase.source !== undefined) {
+      if (!recurringIds.has(purchase.source.recurringId)) {
+        throw new ImportValidationError(
+          `${label} names unknown recurring cost "${purchase.source.recurringId}"`,
+        );
+      }
+      if (!PURCHASE_DATE.test(purchase.source.occurrenceDate)) {
+        throw new ImportValidationError(
+          `${label} has an invalid occurrence date "${purchase.source.occurrenceDate}"`,
+        );
+      }
     }
   }
 
