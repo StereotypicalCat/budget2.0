@@ -347,6 +347,42 @@ describe("recurring cost validation", () => {
     expect(() => parseDatasetJson(withRecurring([{ ...valid, splits: [] }])))
       .toThrow(/no splits/);
   });
+
+  test("a null recurring cost entry is refused, not a raw TypeError", () => {
+    // `recurring: [null]` used to reach `cost.id`/`cost.name` unguarded and
+    // throw TypeError instead of the file's own ImportValidationError.
+    expect(() => parseDatasetJson(withRecurring([null]))).toThrow(ImportValidationError);
+  });
+
+  test("an unknown splitMode is refused", () => {
+    // charges.ts picks distributeByWeight/distributeByAmount on
+    // `splitMode === "percent"`; any other string silently takes the "fixed"
+    // branch and treats a percentage as an absolute amount.
+    expect(() => parseDatasetJson(withRecurring([{ ...valid, splitMode: "ratio" }])))
+      .toThrow(/splitMode/);
+  });
+
+  test("a non-numeric split value is refused", () => {
+    // A non-finite value would otherwise propagate as NaN through the fold,
+    // and roundMoney(NaN, digits) returns NaN rather than throwing.
+    expect(() =>
+      parseDatasetJson(withRecurring([{
+        ...valid,
+        splits: [{ postId: "housing", value: "oops", absorbsRemainder: true }],
+      }])),
+    ).toThrow(/finite number/);
+  });
+
+  test("a negative split value is still accepted", () => {
+    // Deliberately unchecked per AGENTS.md §3: a refund is a normal line.
+    // Only non-numbers are rejected, never a negative or over-100 value.
+    expect(() =>
+      parseDatasetJson(withRecurring([{
+        ...valid,
+        splits: [{ postId: "housing", value: -50, absorbsRemainder: true }],
+      }])),
+    ).not.toThrow();
+  });
 });
 
 describe("Purchase.source validation", () => {
@@ -390,5 +426,40 @@ describe("Purchase.source validation", () => {
       splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
     }];
     expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/occurrence date/);
+  });
+
+  test("a source of null is refused, not a raw TypeError", () => {
+    // `source: null` used to reach `null.recurringId` unguarded — a plausible
+    // hand-edit, since the sibling field on the same object literal IS
+    // `schedule: null`. `source` is typed absent-or-object, never null, so
+    // this must fail as ImportValidationError, not TypeError.
+    expect(() => parseDatasetJson(withSource(null))).toThrow(ImportValidationError);
+  });
+});
+
+describe("purchase splits validation", () => {
+  // I1/I2 apply identically to purchases: the shared requireSplits() helper
+  // must not check purchases to a lower standard than recurring costs.
+  test("an unknown splitMode on a purchase is refused", () => {
+    const data: any = populated();
+    data.purchases[0].splitMode = "ratio";
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/splitMode/);
+  });
+
+  test("a non-numeric split value on a purchase is refused", () => {
+    const data: any = populated();
+    data.purchases[0].splits[0].value = "oops";
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/finite number/);
+  });
+
+  test("a negative split value on a purchase is still accepted", () => {
+    const data: any = populated();
+    data.purchases[0].splits[0].value = -70;
+    expect(() => parseDatasetJson(JSON.stringify(data))).not.toThrow();
+  });
+
+  test("a well-formed purchase still round-trips through the shared helper", () => {
+    const data = populated();
+    expect(parseDatasetJson(exportDatasetJson(data)).purchases.length).toBe(1);
   });
 });

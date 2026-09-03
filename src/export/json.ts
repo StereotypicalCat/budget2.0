@@ -38,6 +38,7 @@ const PURCHASE_DATE = /^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/;
 
 const ANCHORINGS = new Set(["calendar", "lastCharge"]);
 const RECURRENCE_KINDS = new Set(["everyNMonths", "everyNDays", "everyNWeeks"]);
+const SPLIT_MODES = new Set(["percent", "fixed"]);
 
 /**
  * `Currency` is an open string now, so this — not the type system — is what
@@ -155,6 +156,65 @@ function requireRecurrence(recurrence: any, label: string): void {
 }
 
 /**
+ * Shared by the purchases loop and the recurring-costs loop below — the only
+ * two places a `splitMode`/`splits` pair occurs, and both feed the identical
+ * `distributeByWeight`/`distributeByAmount` branch in `domain/charges.ts`.
+ * One helper means the two write paths cannot silently drift into checking
+ * to different standards; the two loops used to each carry their own copy of
+ * the "no splits" / "one absorber" / "unknown post" checks, so this replaces
+ * both rather than adding a third copy.
+ *
+ * `splitMode` must be one of the two known modes: `charges.ts` picks its
+ * distribution function with `splitMode === "percent" ? ... : ...`, so any
+ * OTHER string silently takes the "fixed" branch and treats an intended
+ * percentage as an absolute amount — a silently wrong number, not a throw.
+ *
+ * Every split's `value` must be a finite number. A non-finite value (missing,
+ * a string, NaN, Infinity) would otherwise propagate through
+ * `distributeByWeight`/`distributeByAmount` as NaN, and `roundMoney(NaN,
+ * digits)` returns NaN rather than throwing — it would corrupt a total
+ * silently, deep inside the fold.
+ *
+ * NEGATIVE values, values over 100, and splits that do not sum to the total
+ * are all deliberately UNCHECKED — AGENTS.md lists these as intentional
+ * (a refund is a normal line, and the absorbing split reconciles the sum by
+ * design). Only non-numbers are rejected here.
+ */
+function requireSplits(
+  splits: unknown,
+  splitMode: unknown,
+  label: string,
+  postIds: ReadonlySet<string>,
+): void {
+  if (!SPLIT_MODES.has(splitMode as string)) {
+    throw new ImportValidationError(
+      `${label} has an unknown splitMode "${String(splitMode)}"`,
+    );
+  }
+  if (!Array.isArray(splits) || splits.length === 0) {
+    throw new ImportValidationError(`${label} has no splits; at least one split is required`);
+  }
+  const absorbers = (splits as Array<Record<string, unknown>>).filter(
+    (s) => s?.absorbsRemainder,
+  ).length;
+  if (absorbers !== 1) {
+    throw new ImportValidationError(
+      `${label} has ${absorbers} splits flagged absorbsRemainder; exactly one is required`,
+    );
+  }
+  for (const split of splits as Array<Record<string, unknown>>) {
+    if (!postIds.has(split?.postId as string)) {
+      throw new ImportValidationError(`${label} references unknown post "${String(split?.postId)}"`);
+    }
+    if (typeof split?.value !== "number" || !Number.isFinite(split.value)) {
+      throw new ImportValidationError(
+        `${label} has a split value that is not a finite number: ${String(split?.value)}`,
+      );
+    }
+  }
+}
+
+/**
  * Validates far enough that the fold cannot throw on the imported data: every
  * split points at a real post, every purchase has exactly one remainder
  * absorber, every MonthId parses, and every rule version resolves
@@ -248,9 +308,17 @@ export function parseDatasetJson(text: string): Dataset {
 
   const recurring = Array.isArray(data.recurring) ? (data.recurring as any[]) : [];
   dataset.recurring = recurring;
-  const recurringIds = new Set(recurring.map((cost: any) => cost.id));
+  // Optional chaining, not `.id` directly: a null/non-object entry must fall
+  // through to the loop below and fail there with an ImportValidationError,
+  // not throw a raw TypeError here while merely collecting ids.
+  const recurringIds = new Set(recurring.map((cost: any) => cost?.id));
 
   for (const cost of recurring) {
+    if (!cost || typeof cost !== "object") {
+      throw new ImportValidationError(
+        `A recurring cost is missing or not an object: ${JSON.stringify(cost)}`,
+      );
+    }
     const label = `Recurring cost "${cost.name}"`;
     requireCurrency(cost.amount?.currency, label, defined);
 
@@ -267,20 +335,7 @@ export function parseDatasetJson(text: string): Dataset {
         `${label} has an unknown anchoring "${String(cost.anchoring)}"`,
       );
     }
-    if (!Array.isArray(cost.splits) || cost.splits.length === 0) {
-      throw new ImportValidationError(`${label} has no splits; at least one split is required`);
-    }
-    const absorbers = cost.splits.filter((s: any) => s.absorbsRemainder).length;
-    if (absorbers !== 1) {
-      throw new ImportValidationError(
-        `${label} has ${absorbers} splits flagged absorbsRemainder; exactly one is required`,
-      );
-    }
-    for (const split of cost.splits) {
-      if (!postIds.has(split.postId)) {
-        throw new ImportValidationError(`${label} references unknown post "${split.postId}"`);
-      }
-    }
+    requireSplits(cost.splits, cost.splitMode, label, postIds);
   }
 
   for (const month of dataset.months) {
@@ -297,22 +352,7 @@ export function parseDatasetJson(text: string): Dataset {
     if (!PURCHASE_DATE.test(purchase.date)) {
       throw new ImportValidationError(`${label} has an invalid date "${purchase.date}"`);
     }
-    if (purchase.splits.length === 0) {
-      throw new ImportValidationError(`${label} has no splits; at least one split is required`);
-    }
-    const absorbers = purchase.splits.filter((s) => s.absorbsRemainder).length;
-    if (absorbers !== 1) {
-      throw new ImportValidationError(
-        `${label} has ${absorbers} splits flagged absorbsRemainder; exactly one is required`,
-      );
-    }
-    for (const split of purchase.splits) {
-      if (!postIds.has(split.postId)) {
-        throw new ImportValidationError(
-          `${label} references unknown post "${split.postId}"`,
-        );
-      }
-    }
+    requireSplits(purchase.splits, purchase.splitMode, label, postIds);
     for (const slice of purchase.schedule?.slices ?? []) {
       if (!MONTH_ID.test(slice.month)) {
         throw new ImportValidationError(`${label} has invalid slice month "${slice.month}"`);
@@ -321,6 +361,17 @@ export function parseDatasetJson(text: string): Dataset {
     }
 
     if (purchase.source !== undefined) {
+      // `null` is not `undefined`, so it reaches here without being "no
+      // source". The field is typed as absent-or-object, never null, so a
+      // null (or any other non-object) is malformed input, not a missing
+      // field — reject it cleanly rather than dereferencing it into a raw
+      // TypeError. `schedule?.slices ?? []` two blocks up is the same
+      // defensive style applied to a sibling field that IS legitimately null.
+      if (!purchase.source || typeof purchase.source !== "object") {
+        throw new ImportValidationError(
+          `${label} has a source that is not an object: ${JSON.stringify(purchase.source)}`,
+        );
+      }
       if (!recurringIds.has(purchase.source.recurringId)) {
         throw new ImportValidationError(
           `${label} names unknown recurring cost "${purchase.source.recurringId}"`,
