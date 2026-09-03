@@ -27,6 +27,11 @@ server.ts     the Docker image's static file server.
 The dependency rule is one-directional: `ui -> store -> domain`. `domain` imports
 nothing from the others; `store` never imports from `ui`.
 
+Two `src/domain/` modules worth naming individually: `days.ts` is day-ordinal
+arithmetic with no `Date` at all, and `occurrences.ts` walks a recurring cost's
+schedule forward from `startDate`, computing its occurrences fresh on every
+fold rather than storing them.
+
 `src/domain/smoke.test.ts` asserts the domain is importable with no DOM. That is
 why happy-dom is registered **per test file** rather than as a global bunfig
 preload — a global DOM would make that assertion vacuously true and silently
@@ -44,6 +49,21 @@ Unspent carries; overspend carries as debt. **Nothing else may recompute this.**
 The month view, year matrix, summary, per-post views and the ODS export all
 aggregate over `foldBalances` / `figuresFor`. A closing balance is read from
 `byMonth[11].remaining`, never re-summed.
+
+A recurring cost adds a SECOND balance beside it, on its own carry:
+
+```
+projected = projectedCarriedIn + allocation − charges − expected
+```
+
+`remaining` never changes shape or value because of a recurring cost — it is
+still the figure the owner reconciles against their bank statement. `projected`
+runs beside it, additionally subtracting this month's unconfirmed occurrences,
+so the month view shows both a `Remaining` and a `Projected` column per post
+rather than only a separate list of upcoming bills. With no recurring costs the
+two tracks are identical in every month; once every occurrence in a month is
+confirmed they reconverge, because a confirmation is an ordinary purchase
+counted in `charges` and skipped by `expected`.
 
 If you find yourself writing `carriedIn + allocation - charges` outside
 `fold.ts`, that is the invariant breaking. It matters because two screens
