@@ -7,6 +7,7 @@ export * from "./days.ts";
 export * from "./fx.ts";
 export * from "./allocation.ts";
 export * from "./charges.ts";
+export * from "./occurrences.ts";
 export * from "./fold.ts";
 export * from "./views.ts";
 export * from "./seed.ts";
