@@ -12,11 +12,15 @@ function figures(partial: Partial<PostMonthFigures>): PostMonthFigures {
   const carriedIn = partial.carriedIn ?? 0;
   const allocation = partial.allocation ?? 0;
   const charges = partial.charges ?? 0;
+  const remaining = partial.remaining ?? carriedIn + allocation - charges;
   return {
     carriedIn,
     allocation,
     charges,
-    remaining: partial.remaining ?? carriedIn + allocation - charges,
+    remaining,
+    expected: partial.expected ?? 0,
+    projectedCarriedIn: partial.projectedCarriedIn ?? carriedIn,
+    projected: partial.projected ?? remaining,
   };
 }
 

@@ -479,15 +479,7 @@ describe("6 -> 7: recurring costs join the dataset", () => {
     for (const post of migrated.posts) {
       for (const month of ["2026-09", "2026-10", "2026-11", "2026-12"]) {
         const figures = figuresFor(fold, post.id, month);
-        // `projected` and `expected` don't exist on PostMonthFigures until
-        // Task 5 adds them — this is the deliberate known-red guard the task
-        // brief calls for. The ts-expect-error, not a weaker cast, means this
-        // line breaks loudly (as an unused-suppression compile error) the
-        // moment Task 5 lands the fields, forcing it to be revisited rather
-        // than silently starting to pass.
-        // @ts-expect-error PostMonthFigures gains `projected` in Task 5.
         expect(figures.projected).toBe(figures.remaining);
-        // @ts-expect-error PostMonthFigures gains `expected` in Task 5.
         expect(figures.expected).toBe(0);
       }
     }
