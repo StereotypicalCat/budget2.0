@@ -14,9 +14,52 @@ import {
 import { parseMoneyInput } from "../../moneyInput.ts";
 import { currentMonth } from "../../../store/index.ts";
 import { Section } from "../../components/Section.tsx";
-import type { Recurrence, RecurringCost } from "../../../domain/types.ts";
+import { monthOf } from "../../../domain/months.ts";
+import { toDayOrdinal } from "../../../domain/days.ts";
+import type { IsoDate, Recurrence, RecurringCost } from "../../../domain/types.ts";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** "YYYY-MM" is 7 characters; "YYYY-MM-DD" is 10. Same idiom PurchaseDialog uses. */
+export function isDayGranular(date: IsoDate): boolean {
+  return date.length > 7;
+}
+
+/**
+ * True only for a string this cost's recurrence kind could actually walk:
+ * `everyNMonths` tolerates either granularity (the walk normalises through
+ * `monthOf`), the other two require a day-granular date because they reach
+ * `addDays` directly. Reuses the domain's own parsers rather than a second,
+ * possibly-diverging regex.
+ *
+ * Exported for `RecurringSection.test.ts` — this is the one thing standing
+ * between the "Starts" field and C2 (an empty or malformed value bricking
+ * every route the fold touches), so it is tested directly rather than only
+ * through a DOM interaction.
+ */
+export function isValidStartDate(value: string, kind: Recurrence["kind"]): boolean {
+  try {
+    if (kind === "everyNMonths") monthOf(value);
+    else toDayOrdinal(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * What the "Starts" value becomes when the owner switches to a day-granular
+ * unit: a month-only value expands to the first of that month, in the SAME
+ * mutate call that changes the kind (C1) — the walk must never see the old
+ * pairing even for one render. `everyNMonths` and an already day-granular
+ * value pass through untouched.
+ *
+ * Exported for `RecurringSection.test.ts`.
+ */
+export function normalizedStartDateFor(kind: Recurrence["kind"], startDate: IsoDate): IsoDate {
+  if (kind === "everyNMonths" || isDayGranular(startDate)) return startDate;
+  return `${startDate}-01`;
+}
 
 export function RecurringSection() {
   const dataset = useDataset();
@@ -82,7 +125,15 @@ export function RecurringSection() {
               kind === "everyNWeeks"
                 ? { kind, n: cost.recurrence.n, weekday: 1 }
                 : { kind, n: cost.recurrence.n };
-            mutate((draft) => updateRecurringCost(draft, cost.id, { recurrence }));
+            // Switching to a day-granular kind against a month-only
+            // startDate is exactly how C1 bricked the app: the walk hands
+            // "2026-09" to addDays and throws. Expand it to the first of
+            // that month IN THIS SAME mutate call, so the pairing the store
+            // now validates never has a chance to go wrong.
+            const startDate = normalizedStartDateFor(kind, cost.startDate);
+            mutate((draft) =>
+              updateRecurringCost(draft, cost.id, { recurrence, startDate }),
+            );
           }}
         >
           <option value="everyNDays">days</option>
@@ -169,14 +220,27 @@ export function RecurringSection() {
                     </NativeSelect>
                   </td>
                   <td className="py-2">
+                    {/* Uncontrolled: committing only happens on blur, and only
+                        when the text parses as an IsoDate of the granularity
+                        this cost's recurrence kind requires. Keyed on the
+                        stored value so an external change (kind flip
+                        auto-expanding it, or a rejected edit) is reflected
+                        rather than left showing stale typed text. */}
                     <Input
+                      key={`${cost.id}-${cost.startDate}`}
                       className="h-8 w-32"
                       type="text"
                       aria-label={`Start date for ${cost.name}`}
-                      value={cost.startDate}
-                      onChange={(event) => {
-                        const startDate = event.target.value;
-                        mutate((draft) => updateRecurringCost(draft, cost.id, { startDate }));
+                      defaultValue={cost.startDate}
+                      onBlur={(event) => {
+                        const typed = event.target.value;
+                        if (!isValidStartDate(typed, cost.recurrence.kind)) {
+                          event.target.value = cost.startDate;
+                          return;
+                        }
+                        mutate((draft) =>
+                          updateRecurringCost(draft, cost.id, { startDate: typed }),
+                        );
                       }}
                     />
                   </td>
