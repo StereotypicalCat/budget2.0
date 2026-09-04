@@ -446,13 +446,22 @@ export function addRecurringCost(
   return created;
 }
 
+/**
+ * `archived` and `endedFrom` are excluded on purpose: they are a coherent
+ * pair (`archived` mirrors "`endedFrom` is set") maintained ONLY by
+ * `setRecurringCostEndedFrom`, and a caller able to pass either through here
+ * could desynchronise them — a bill that reads as live but is dimmed, or
+ * ended but not. Route a change to either field through
+ * `setRecurringCostEndedFrom` (or its `endRecurringCost`/`restoreRecurringCost`
+ * convenience wrappers) instead.
+ */
 export function updateRecurringCost(
   draft: Dataset,
   id: RecurringCostId,
-  changes: Partial<Omit<RecurringCost, "id">>,
+  changes: Partial<Omit<RecurringCost, "id" | "archived" | "endedFrom">>,
 ): void {
   const cost = requireRecurringCost(draft, id);
-  const resolved: Partial<Omit<RecurringCost, "id">> = { ...changes };
+  const resolved: Partial<Omit<RecurringCost, "id" | "archived" | "endedFrom">> = { ...changes };
 
   if (changes.recurrence) {
     resolved.recurrence = requireRecurrence(changes.recurrence);
