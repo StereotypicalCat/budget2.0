@@ -87,6 +87,43 @@ export function confirmationsFor(
 }
 
 /**
+ * The date `occurrencesOf`'s walk would step from after confirming `cost`'s
+ * slot `cursor` as having been paid on `confirmedDate` — the same rebase rule
+ * the walk applies inline. Extracted so a caller can ask "would this pairing
+ * advance the series" (see `wouldAdvancePast` below) without re-deriving it.
+ */
+function rebasedFrom(cost: RecurringCost, cursor: IsoDate, confirmedDate: IsoDate): IsoDate {
+  if (cost.anchoring !== "lastCharge") return cursor;
+  if (cost.recurrence.kind === "everyNMonths") {
+    return compareMonths(monthOf(confirmedDate), cursor) > 0 ? confirmedDate : cursor;
+  }
+  return confirmedDate;
+}
+
+/**
+ * Whether recording `cost`'s slot `slot` as paid on `recordedDate` would
+ * leave `occurrencesOf` able to step strictly past `slot` — i.e. whether that
+ * pairing is one the walk can survive at all, checked BEFORE a purchase
+ * carrying it is ever written.
+ *
+ * Calendar anchoring always advances, because it never rebases from the
+ * confirmation date; `everyNMonths` under `lastCharge` also always advances,
+ * because it only rebases forward within the slot's own month. The one case
+ * that can fail is a day/week-granular `lastCharge` cost recorded far enough
+ * before its slot that stepping from `recordedDate` still lands at or before
+ * `slot` — exactly the shape of `occurrencesOf`'s "did not advance" throw.
+ *
+ * Exported for `ExpectedBand.tsx`'s "Coming up" group, whose whole premise is
+ * recording a slot's confirmation on a date OTHER than the slot itself
+ * (today, because paying early). The walk's throw is correct — a step that
+ * lands backwards really is bad data — so the band, which chooses
+ * `recordedDate`, must not offer a row that would produce that pairing.
+ */
+export function wouldAdvancePast(cost: RecurringCost, slot: IsoDate, recordedDate: IsoDate): boolean {
+  return isBefore(slot, stepFrom(rebasedFrom(cost, slot, recordedDate), cost.recurrence));
+}
+
+/**
  * Every occurrence of one cost from its start through `upToMonth`, in order.
  *
  * A walk rather than a per-month query, because under `lastCharge` anchoring
@@ -133,14 +170,7 @@ export function occurrencesOf(
     // later, the cursor or the confirmation's month; an early payment within
     // the same month simply does not rebase. Day/week-granular kinds keep
     // stepping from the confirmation's exact date, unchanged.
-    const from =
-      cost.anchoring === "lastCharge" && confirmation
-        ? cost.recurrence.kind === "everyNMonths"
-          ? compareMonths(monthOf(confirmation.date), cursor) > 0
-            ? confirmation.date
-            : cursor
-          : confirmation.date
-        : cursor;
+    const from = confirmation ? rebasedFrom(cost, cursor, confirmation.date) : cursor;
     const next = stepFrom(from, cost.recurrence);
 
     // The loop terminates only if the step strictly increases. `n >= 1` is
