@@ -36,6 +36,20 @@ describe("isValidStartDate", () => {
   test("a day-granular kind rejects a malformed day-granular-shaped value", () => {
     expect(isValidStartDate("2026-02-30", "everyNDays")).toBe(false); // no Feb 30
   });
+
+  // Residual C1: `monthOf` only extracts the month and never checks the day,
+  // so a day-SHAPED but calendar-impossible value ("2026-09-31" — September
+  // has 30 days) used to pass here even under everyNMonths, and could then be
+  // stored, only for foldBalances to throw three months later.
+  test("everyNMonths still rejects a day-granular value with an impossible day", () => {
+    expect(isValidStartDate("2026-09-31", "everyNMonths")).toBe(false);
+  });
+
+  test("everyNMonths accepts a real leap-day and rejects a non-leap Feb 29", () => {
+    expect(isValidStartDate("2024-02-29", "everyNMonths")).toBe(true); // 2024 is a leap year
+    expect(isValidStartDate("2026-02-29", "everyNMonths")).toBe(false); // 2026 is not
+    expect(isValidStartDate("2026-02-28", "everyNMonths")).toBe(true);
+  });
 });
 
 // C1: switching the unit dropdown to a day-granular kind must expand a

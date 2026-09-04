@@ -32,6 +32,12 @@ export function isDayGranular(date: IsoDate): boolean {
  * `addDays` directly. Reuses the domain's own parsers rather than a second,
  * possibly-diverging regex.
  *
+ * A day-SHAPED value is routed through `toDayOrdinal` even under
+ * `everyNMonths`: `monthOf` only extracts the month and never checks the day,
+ * so without this a calendar-impossible date like "2026-09-31" (September has
+ * 30 days) would pass here and could still be stored, only to throw three
+ * months later out of the fold.
+ *
  * Exported for `RecurringSection.test.ts` — this is the one thing standing
  * between the "Starts" field and C2 (an empty or malformed value bricking
  * every route the fold touches), so it is tested directly rather than only
@@ -39,7 +45,7 @@ export function isDayGranular(date: IsoDate): boolean {
  */
 export function isValidStartDate(value: string, kind: Recurrence["kind"]): boolean {
   try {
-    if (kind === "everyNMonths") monthOf(value);
+    if (kind === "everyNMonths" && !isDayGranular(value)) monthOf(value);
     else toDayOrdinal(value);
     return true;
   } catch {

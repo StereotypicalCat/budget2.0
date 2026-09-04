@@ -1,5 +1,7 @@
 import type { Currency, CurrencyDef, Dataset, MonthId } from "../domain/types.ts";
 import { migrate } from "../store/migrations.ts";
+import { monthOf } from "../domain/months.ts";
+import { toDayOrdinal } from "../domain/days.ts";
 
 export class ImportValidationError extends Error {
   constructor(message: string) {
@@ -227,9 +229,10 @@ function requireSplits(
  * split points at a real post, every purchase has exactly one remainder
  * absorber, every MonthId parses, every rule version resolves unambiguously
  * to a number rather than to NaN or a missing rate, and every recurring
- * cost's startDate is granular enough for its recurrence kind (day-granular
- * for everyNDays/everyNWeeks, since occurrencesOf hands it straight to
- * addDays).
+ * cost's startDate is both granular enough for its recurrence kind
+ * (day-granular for everyNDays/everyNWeeks, since occurrencesOf hands it
+ * straight to addDays) and calendar-valid (no "2026-09-31"), since shape and
+ * range alone let an impossible date through.
  */
 export function parseDatasetJson(text: string): Dataset {
   let raw: unknown;
@@ -344,9 +347,23 @@ export function parseDatasetJson(text: string): Dataset {
     // granularity; the other two kinds reach `addDays` and need a
     // day-granular startDate specifically. `endedFrom` needs no such check —
     // it is only ever compared lexicographically, never fed to `addDays`.
-    if (cost.recurrence.kind !== "everyNMonths" && !DAY_GRANULAR_DATE.test(cost.startDate)) {
+    const dayGranular = DAY_GRANULAR_DATE.test(cost.startDate);
+    if (cost.recurrence.kind !== "everyNMonths" && !dayGranular) {
       throw new ImportValidationError(
         `${label} has a "${cost.recurrence.kind}" recurrence but a month-only start date "${cost.startDate}"; it needs "YYYY-MM-DD"`,
+      );
+    }
+    // Shape and range (checked above by PURCHASE_DATE/DAY_GRANULAR_DATE) still
+    // let a calendar-impossible date through, e.g. "2026-09-31" (September has
+    // 30 days) or "2026-02-30". Route it through the same domain parsers the
+    // fold itself uses, so an impossible date is refused here instead of
+    // throwing three months later out of `foldBalances`.
+    try {
+      if (dayGranular) toDayOrdinal(cost.startDate);
+      else monthOf(cost.startDate);
+    } catch (error) {
+      throw new ImportValidationError(
+        `${label} has a calendar-impossible start date "${cost.startDate}" (${(error as Error).message})`,
       );
     }
 

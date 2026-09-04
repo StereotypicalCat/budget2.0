@@ -348,6 +348,43 @@ describe("recurring cost validation", () => {
     ).toBe(1);
   });
 
+  // Residual C1: PURCHASE_DATE/DAY_GRANULAR_DATE check shape and range
+  // ("31" is a valid day-of-month digit pair), not calendar validity.
+  // September has 30 days, so "2026-09-31" passed both regexes and the
+  // fold later threw "Invalid day in IsoDate" out of addDays/toDayOrdinal.
+  test("an impossible day on a day-granular kind is refused, not just shape-checked (residual C1)", () => {
+    expect(() =>
+      parseDatasetJson(
+        withRecurring([
+          { ...valid, startDate: "2026-02-30", recurrence: { kind: "everyNDays", n: 1 } },
+        ]),
+      ),
+    ).toThrow(/calendar-impossible/);
+  });
+
+  test("an impossible day is refused even under everyNMonths (residual C1)", () => {
+    expect(() =>
+      parseDatasetJson(withRecurring([{ ...valid, startDate: "2026-09-31" }])),
+    ).toThrow(/calendar-impossible/);
+  });
+
+  test("leap-year and non-leap-year Februaries are accepted (residual C1)", () => {
+    expect(
+      parseDatasetJson(
+        withRecurring([
+          { ...valid, startDate: "2024-02-29", recurrence: { kind: "everyNDays", n: 1 } }, // 2024 is a leap year
+        ]),
+      ).recurring.length,
+    ).toBe(1);
+    expect(
+      parseDatasetJson(
+        withRecurring([
+          { ...valid, startDate: "2026-02-28", recurrence: { kind: "everyNDays", n: 1 } }, // 2026 is not
+        ]),
+      ).recurring.length,
+    ).toBe(1);
+  });
+
   test("an unknown recurrence kind is refused", () => {
     expect(() => parseDatasetJson(withRecurring([{ ...valid, recurrence: { kind: "everyFullMoon", n: 1 } }])))
       .toThrow(/unknown kind/);

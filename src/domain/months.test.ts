@@ -108,3 +108,12 @@ test("monthOf still rejects out-of-range and malformed month-only values", () =>
   expect(() => monthOf("2026-00")).toThrow(/2026-00/);
   expect(() => monthOf("2026-9")).toThrow(/2026-9/);
 });
+
+// Residual C1: the regex used to be `/^(\d{4})-(\d{2})/` with no trailing
+// anchor, so it matched a "YYYY-MM" PREFIX of a longer string and silently
+// dropped the rest — "2026-091" read back as September 2026. Such a value
+// would then be un-re-importable, since PURCHASE_DATE (src/export/json.ts)
+// rejects it outright.
+test("monthOf rejects a value that is only a prefix match, not a full one", () => {
+  expect(() => monthOf("2026-091")).toThrow(/2026-091/);
+});

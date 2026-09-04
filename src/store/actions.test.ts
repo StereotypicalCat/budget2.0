@@ -593,6 +593,76 @@ describe("recurring costs", () => {
       expect(data.recurring[0]!.startDate).toBe("2026-09-01");
       expect(data.recurring[0]!.recurrence.kind).toBe("everyNDays");
     });
+
+    // Residual C1: shape alone ("YYYY-MM-DD") is not calendar validity.
+    // September has 30 days, so "2026-09-31" is day-SHAPED but impossible.
+    // `requireStartDateGranularity` used a shape-only regex and let this
+    // through even under everyNMonths; downstream, foldBalances throws
+    // "Invalid day in IsoDate" out of addDays/toDayOrdinal.
+    test("a calendar-impossible startDate is refused, even under everyNMonths", () => {
+      const data = draft();
+      expect(() =>
+        actions.addRecurringCost(data, { ...rentInput, startDate: "2026-09-31" }),
+      ).toThrow(/2026-09-31/);
+
+      const cost = actions.addRecurringCost(data, rentInput);
+      expect(() =>
+        actions.updateRecurringCost(data, cost.id, { startDate: "2026-09-31" }),
+      ).toThrow(/2026-09-31/);
+      // Refused, so nothing committed beyond the one successful add above.
+      expect(data.recurring.length).toBe(1);
+      expect(data.recurring[0]!.startDate).toBe(rentInput.startDate);
+    });
+
+    // Second half of the same reproduction: even if a calendar-impossible
+    // startDate is already sitting in the draft (e.g. from data written
+    // before this fix existed), switching the recurrence kind must not wave
+    // it through — requireStartDateGranularity re-validates on every update,
+    // not only ones that touch startDate.
+    test("switching kind against an already-impossible stored startDate is refused", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, rentInput);
+      // Bypass the public API to simulate a bad value already on disk.
+      data.recurring[0]!.startDate = "2026-09-31";
+      expect(() =>
+        actions.updateRecurringCost(data, cost.id, { recurrence: { kind: "everyNDays", n: 7 } }),
+      ).toThrow(/2026-09-31/);
+      expect(data.recurring[0]!.recurrence.kind).toBe("everyNMonths");
+    });
+
+    // Residual C1: monthOf's regex used to be unanchored (`/^(\d{4})-(\d{2})/`
+    // with no trailing `$`), so it matched a "YYYY-MM" PREFIX of a longer,
+    // malformed string and silently dropped the rest.
+    test("an unanchored-month-shaped garbage value is refused", () => {
+      const data = draft();
+      expect(() =>
+        actions.addRecurringCost(data, { ...rentInput, startDate: "2026-091" }),
+      ).toThrow(/2026-091/);
+
+      const cost = actions.addRecurringCost(data, rentInput);
+      expect(() =>
+        actions.updateRecurringCost(data, cost.id, { startDate: "2026-091" }),
+      ).toThrow(/2026-091/);
+    });
+
+    test("legitimate calendar-valid dates still pass", () => {
+      const data = draft();
+      expect(() => actions.addRecurringCost(data, { ...rentInput, startDate: "2026-09" })).not.toThrow();
+      expect(() =>
+        actions.addRecurringCost(data, {
+          ...rentInput,
+          startDate: "2024-02-29", // 2024 is a leap year
+          recurrence: { kind: "everyNDays", n: 1 },
+        }),
+      ).not.toThrow();
+      expect(() =>
+        actions.addRecurringCost(data, {
+          ...rentInput,
+          startDate: "2026-02-28", // 2026 is not a leap year
+          recurrence: { kind: "everyNDays", n: 1 },
+        }),
+      ).not.toThrow();
+    });
   });
 
   test("ending sets both endedFrom and archived", () => {

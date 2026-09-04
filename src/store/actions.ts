@@ -1,5 +1,6 @@
 import { newId } from "../domain/seed.ts";
 import { compareMonths, monthOf } from "../domain/months.ts";
+import { toDayOrdinal } from "../domain/days.ts";
 import { roundMoney } from "../domain/money.ts";
 import { currencyUsage, normalizeCurrencyCode } from "../domain/currencies.ts";
 import type {
@@ -402,12 +403,27 @@ const DAY_GRANULAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
  * to `addDays`, which throws on a month-only date — so those kinds require a
  * day-granular `startDate` here, at the boundary, rather than three months
  * later when a fold walks off the end of it.
+ *
+ * Shape alone is not enough: "2026-09-31" is day-SHAPED but calendar-
+ * impossible (September has 30 days), and would otherwise reach `addDays` (or
+ * sit unnoticed under `everyNMonths`) and throw three months later out of the
+ * fold instead of here. Route a day-granular value through `toDayOrdinal` and
+ * a month-granular one through `monthOf` — both already throw on exactly
+ * that — and translate whatever they throw into this file's own error style.
  */
 function requireStartDateGranularity(recurrence: Recurrence, startDate: IsoDate): void {
-  if (recurrence.kind === "everyNMonths") return;
-  if (!DAY_GRANULAR_DATE.test(startDate)) {
+  const dayGranular = DAY_GRANULAR_DATE.test(startDate);
+  if (recurrence.kind !== "everyNMonths" && !dayGranular) {
     throw new Error(
       `A "${recurrence.kind}" recurrence needs a day-granular startDate ("YYYY-MM-DD"), not "${startDate}"`,
+    );
+  }
+  try {
+    if (dayGranular) toDayOrdinal(startDate);
+    else monthOf(startDate);
+  } catch (error) {
+    throw new Error(
+      `A "${recurrence.kind}" recurrence needs a valid startDate, not "${startDate}" (${(error as Error).message})`,
     );
   }
 }
