@@ -1,7 +1,7 @@
 import { DEFAULT_DIGITS, SEED_CURRENCIES } from "./types.ts";
 import type { CurrencyDef, Dataset, FxRate, MonthId, Post } from "./types.ts";
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 const SEED_POST_NAMES = ["Video Games", "Food", "Events and Social"] as const;
 
@@ -47,5 +47,9 @@ export function createSeedDataset(
       { id: startMonth, income: { amount: 0, currency: "DKK" }, ruleOverrides: {} },
     ],
     purchases: [],
+    // A new dataset seeds no recurring costs. Unlike currencies and FX rates,
+    // there is no sensible default bill — the app cannot guess what the owner
+    // pays.
+    recurring: [],
   };
 }

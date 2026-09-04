@@ -53,6 +53,7 @@ function dataset(overrides: Partial<Dataset> = {}): Dataset {
       { id: "2026-01", income: { amount: 20000, currency: "DKK" }, ruleOverrides: {} },
     ],
     purchases: [],
+    recurring: [],
     ...overrides,
   };
 }
@@ -204,6 +205,7 @@ describe("the fold across a rule change", () => {
       ruleOverrides: {},
     })),
     purchases: [],
+    recurring: [],
   };
 
   test("the allocation steps up in the version's month", () => {

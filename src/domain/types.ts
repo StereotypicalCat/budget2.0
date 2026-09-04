@@ -105,6 +105,65 @@ export interface Schedule {
   cancelledFromMonth?: MonthId;
 }
 
+export type RecurringCostId = string;
+
+/**
+ * How occurrence dates are generated.
+ *
+ * Extensible on purpose: a new variant here plus one case in `stepFrom`
+ * (`occurrences.ts`) is the whole change — nothing else in the app switches on
+ * this. `n` must be an integer >= 1 in every variant, which is what makes the
+ * projection walk terminate; both write boundaries enforce it.
+ */
+export type Recurrence =
+  | { kind: "everyNMonths"; n: number }
+  | { kind: "everyNDays"; n: number }
+  /** `weekday` is 0 = Sunday, matching `weekdayOf` in `days.ts`. */
+  | { kind: "everyNWeeks"; n: number; weekday: number };
+
+/**
+ * Where the NEXT occurrence is measured from.
+ *
+ * `calendar` — from the previous slot, wherever it fell. Rent, and a
+ * subscription that bills on its own schedule whatever you do.
+ *
+ * `lastCharge` — from the date the previous charge ACTUALLY happened. This is
+ * the phone bill: hitting the data cap makes a charge happen early, and the
+ * next 30 days run from there. The domain never learns what a data cap is;
+ * confirming the occurrence early is the whole mechanism.
+ */
+export type Anchoring = "calendar" | "lastCharge";
+
+export interface RecurringCost {
+  id: RecurringCostId;
+  name: string;
+  order: number;
+  /**
+   * A UI flag ONLY. Projection is governed by `startDate` and `endedFrom`,
+   * exactly as an archived post still folds — archiving must not retroactively
+   * remove past expected charges, because that would move a historical figure.
+   */
+  archived: boolean;
+  /**
+   * Expected amount, in its own currency, converted to base at fold time.
+   *
+   * A single mutable value with no dated series, unlike `Post.rules`. A rent
+   * increase edits it, and history survives because every past occurrence is
+   * a confirmed `Purchase` holding what was actually paid. Only unconfirmed
+   * future occurrences move.
+   */
+  amount: Money;
+  /** The first occurrence. "YYYY-MM" for everyNMonths, "YYYY-MM-DD" otherwise. */
+  startDate: IsoDate;
+  /** Occurrences on or after this date are not projected. This is cancellation. */
+  endedFrom?: IsoDate;
+  recurrence: Recurrence;
+  anchoring: Anchoring;
+  /** Same shape and same invariant as Purchase: exactly one absorbsRemainder. */
+  splitMode: "percent" | "fixed";
+  splits: Split[];
+}
+
 export interface Purchase {
   id: PurchaseId;
   date: IsoDate;
@@ -117,6 +176,16 @@ export interface Purchase {
   splits: Split[];
   /** null means the whole total is charged in the month of `date`. */
   schedule: Schedule | null;
+  /**
+   * Present when this purchase confirms a projected occurrence.
+   *
+   * `occurrenceDate` is IDENTITY — the slot the projector generated, which
+   * this purchase claims so the slot stops being projected. `Purchase.date` is
+   * TRUTH — when the money moved. They differ whenever a bill is paid off
+   * schedule, and under `lastCharge` anchoring it is `date`, not
+   * `occurrenceDate`, that the next occurrence is measured from.
+   */
+  source?: { recurringId: RecurringCostId; occurrenceDate: IsoDate };
 }
 
 export interface FxRate {
@@ -155,4 +224,10 @@ export interface Dataset {
   posts: Post[];
   months: Month[];
   purchases: Purchase[];
+  /**
+   * Bills that repeat. Their occurrences are COMPUTED on every fold and never
+   * stored — the original design rejected materialised snapshots, and an
+   * unbounded recurrence would otherwise need an arbitrary horizon.
+   */
+  recurring: RecurringCost[];
 }

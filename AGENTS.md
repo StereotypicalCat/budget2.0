@@ -47,6 +47,21 @@ and `docs/specs/`, and is not repeated here.
   the owner never chose.
 - **`MonthId` is the string `"YYYY-MM"`.** Stored data never contains `Date`
   objects.
+- **A recurring cost's occurrences are COMPUTED, never stored.** `Dataset`
+  holds the rule and the confirmations; `occurrencesByMonth` derives the rest
+  on every fold, and `upToMonth` comes from the caller so `src/domain/` stays
+  clock-free. Nothing is ever written ahead of time — `ExpectedBand`'s
+  `horizonMonths` only widens how far a single read-only walk looks before
+  throwing its result away; it is a DISPLAY bound on one function call, not a
+  "generate ahead" step, and nothing it produces is persisted. Storing
+  occurrences would reintroduce the materialised snapshot the original design
+  rejected.
+- **On a confirmation, `Purchase.date` is TRUTH and `source.occurrenceDate` is
+  IDENTITY.** The slot is what a confirmation claims, so the projector stops
+  emitting it; the date is when the money moved, so the fold counts it there.
+  They differ whenever a bill is paid off schedule, and under `lastCharge`
+  anchoring it is `date` that rebases the series. Do not "simplify" them into
+  one field — that erases the phone-bill behaviour entirely.
 - **The envelope rollover fold has exactly one implementation**, in
   `src/domain/fold.ts`. Year and summary views aggregate over it — they never
   reimplement the math.
@@ -100,6 +115,14 @@ ship twice — re-introducing one is a regression, not a style choice.
   fold and the month view, and asserts that raising the setting to 2 changes
   what the fold produces. It cannot prove digits vary per currency, because
   they no longer do.
+- **A recurrence interval must be an integer `>= 1`, rejected rather than
+  clamped**, at BOTH write boundaries — `requireRecurrence` in
+  `src/store/actions.ts` and in `src/export/json.ts`. The projection walk
+  terminates only because every step strictly advances, and a clamped zero
+  would hand the owner a schedule their data does not describe. The walk throws
+  if a step fails to advance; do not soften that into a `break`.
+  → `src/domain/occurrences.test.ts`, `src/store/actions.test.ts`,
+  `src/export/json.test.ts`
 - **`process.env.BUN_PUBLIC_*` must be read via `try/catch`** — see
   `readBasePathEnv`. Bun inlines the literal only when the variable is set;
   unset, the bare reference reaches the browser and throws before the app boots.

@@ -18,7 +18,7 @@ record.
   no household mode. → [`PRODUCT.md`](PRODUCT.md)
 - **Schema migrations are mandatory, not optional.** `schemaVersion` plus
   ordered migration functions applied on load, because IndexedDB holds the
-  user's only copy of their financial data. Now at version 6.
+  user's only copy of their financial data. Now at version 7.
   → [`specs/2026-09-01-budget-app-design.md`](specs/2026-09-01-budget-app-design.md)
 - **A destructive write downloads a backup first.** Import and reset both export
   before replacing, and abort if the export fails. → commit `ac3d18a`
@@ -74,6 +74,48 @@ record.
   → [`specs/2026-09-02-versioned-allocation-rules-design.md`](specs/2026-09-02-versioned-allocation-rules-design.md)
 - **Posts are archived, never deleted**, because purchases reference them.
   Archived posts still fold. → [`ARCHITECTURE.md`](ARCHITECTURE.md)
+
+## Recurring costs
+
+- **Two-stage confirmation, over projection-only or generation-only.** A
+  recurring cost projects expected occurrences that stay expected until the
+  owner confirms one into an ordinary `Purchase`. Projection-only would charge
+  automatically with no reconciliation and would also force a dated amount
+  series, since nothing else would hold what was actually paid; generation-only
+  needs a horizon and a notion of "today" the domain is built to avoid.
+  → [`specs/2026-09-03-recurring-costs-design.md`](specs/2026-09-03-recurring-costs-design.md)
+- **A new `RecurringCost` entity, over extending `Purchase.schedule` with a
+  generative variant.** Under two-stage confirmation a template's only job is
+  to spawn purchases, so every consumer of `Purchase` would have to learn to
+  skip templates — a different case from splits and finance plans composing on
+  one entity.
+  → [`specs/2026-09-03-recurring-costs-design.md`](specs/2026-09-03-recurring-costs-design.md)
+- **`lastCharge` anchoring, over a `dataCap` concept for the phone-bill case.**
+  Rebasing the series on the confirmation date reproduces the behaviour exactly,
+  with no usage tracking and no third recurrence kind.
+  → [`specs/2026-09-03-recurring-costs-design.md`](specs/2026-09-03-recurring-costs-design.md)
+- **Day-less `everyNMonths`, over `monthlyOnDay(day)` with short-month
+  clamping.** The owner does not think of rent as landing on a date, `IsoDate`
+  already supports month-only values, and it keeps day arithmetic out of the
+  most common case entirely.
+  → [`specs/2026-09-03-recurring-costs-design.md`](specs/2026-09-03-recurring-costs-design.md)
+- **A mutable `amount`, over a dated series like `Post.rules`.** Safe only
+  because two-stage confirmation already holds every past amount in a confirmed
+  `Purchase`; the rule describes what is expected next, the ledger holds what
+  happened. Under projection-only this would not have held, and a dated series
+  would have been required.
+  → [`specs/2026-09-03-recurring-costs-design.md`](specs/2026-09-03-recurring-costs-design.md)
+- **`archived` MIRRORS "`endedFrom` is set"**, maintained in one place
+  (`setRecurringCostEndedFrom`) rather than two independent fields a caller
+  could desynchronise. `endedFrom` stops the projection; `archived` only dims
+  the row, the same way an archived post stays listed rather than
+  disappearing. Neither touches a past occurrence. One consequence is visible
+  and undocumented until now: dating a cancellation in the future sets
+  `archived` immediately, so a bill still live for months still renders
+  dimmed with a "restart" button while it keeps projecting rows right up to
+  `endedFrom`. Defensible under the rule as chosen, not a bug.
+  → [`specs/2026-09-03-recurring-costs-design.md`](specs/2026-09-03-recurring-costs-design.md),
+  `src/store/actions.ts`
 
 ## Design system
 

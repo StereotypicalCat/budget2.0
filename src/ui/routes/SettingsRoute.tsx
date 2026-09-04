@@ -1,5 +1,6 @@
 import { CurrencySection } from "./settings/CurrencySection.tsx";
 import { PostsSection } from "./settings/PostsSection.tsx";
+import { RecurringSection } from "./settings/RecurringSection.tsx";
 import { DataSection } from "./settings/DataSection.tsx";
 import { ColophonSection } from "./settings/ColophonSection.tsx";
 
@@ -21,6 +22,7 @@ export function SettingsRoute() {
       <h1 className="text-2xl">Settings</h1>
       <CurrencySection />
       <PostsSection />
+      <RecurringSection />
       <DataSection />
       <ColophonSection />
     </div>

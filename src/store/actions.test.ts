@@ -1,6 +1,7 @@
 import { test, expect, describe } from "bun:test";
 import * as actions from "./actions.ts";
 import { createSeedDataset } from "../domain/seed.ts";
+import { occurrencesByMonth } from "../domain/occurrences.ts";
 import type { Dataset } from "../domain/types.ts";
 
 /**
@@ -451,5 +452,470 @@ describe("split values are rounded by what they MEAN", () => {
       });
       expect(purchase.splits[0]!.value).toBe(33.33);
     });
+  });
+});
+
+describe("recurring costs", () => {
+  function draft(): Dataset {
+    const data = createSeedDataset("2026-01");
+    data.posts[0]!.id = "housing";
+    return data;
+  }
+
+  const rentInput = {
+    name: "Rent",
+    archived: false,
+    amount: { amount: 8000, currency: "DKK" },
+    startDate: "2026-01",
+    recurrence: { kind: "everyNMonths" as const, n: 1 },
+    anchoring: "calendar" as const,
+    splitMode: "percent" as const,
+    splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+  };
+
+  test("adding assigns an id and an order", () => {
+    const data = draft();
+    const first = actions.addRecurringCost(data, rentInput);
+    const second = actions.addRecurringCost(data, { ...rentInput, name: "Phone" });
+
+    expect(first.id).not.toBe(second.id);
+    expect(first.order).toBe(0);
+    expect(second.order).toBe(1);
+    expect(data.recurring.length).toBe(2);
+  });
+
+  test("the amount is rounded to the dataset's digits before it lands", () => {
+    const data = draft();
+    data.settings.digits = 0;
+    const cost = actions.addRecurringCost(data, { ...rentInput, amount: { amount: 8000.7, currency: "DKK" } });
+    expect(cost.amount.amount).toBe(8001);
+  });
+
+  test("a recurrence with n below 1 is refused", () => {
+    // The projection walk terminates only if every step advances, and the
+    // importer is not the only write path.
+    const data = draft();
+    expect(() => actions.addRecurringCost(data, { ...rentInput, recurrence: { kind: "everyNDays", n: 0 } }))
+      .toThrow(/at least 1/);
+    expect(() => actions.addRecurringCost(data, { ...rentInput, recurrence: { kind: "everyNDays", n: 1.5 } }))
+      .toThrow(/whole number/);
+  });
+
+  test("a weekday outside 0-6 is refused", () => {
+    const data = draft();
+    expect(() =>
+      actions.addRecurringCost(data, { ...rentInput, recurrence: { kind: "everyNWeeks", n: 1, weekday: 7 } }),
+    ).toThrow(/weekday/);
+  });
+
+  test("updating validates the new recurrence too", () => {
+    const data = draft();
+    const cost = actions.addRecurringCost(data, rentInput);
+    expect(() =>
+      actions.updateRecurringCost(data, cost.id, { recurrence: { kind: "everyNDays", n: 0 } }),
+    ).toThrow(/at least 1/);
+  });
+
+  describe("startDate granularity (C1)", () => {
+    test("adding a day-granular kind with a month-only startDate is refused", () => {
+      const data = draft();
+      expect(() =>
+        actions.addRecurringCost(data, {
+          ...rentInput,
+          startDate: "2026-01",
+          recurrence: { kind: "everyNDays", n: 30 },
+        }),
+      ).toThrow(/day-granular/);
+      expect(() =>
+        actions.addRecurringCost(data, {
+          ...rentInput,
+          startDate: "2026-01",
+          recurrence: { kind: "everyNWeeks", n: 1, weekday: 1 },
+        }),
+      ).toThrow(/day-granular/);
+    });
+
+    test("adding a day-granular kind with a day-granular startDate succeeds", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, {
+        ...rentInput,
+        startDate: "2026-01-05",
+        recurrence: { kind: "everyNDays", n: 30 },
+      });
+      expect(cost.startDate).toBe("2026-01-05");
+    });
+
+    test("everyNMonths accepts either granularity", () => {
+      const data = draft();
+      expect(() => actions.addRecurringCost(data, { ...rentInput, startDate: "2026-01" })).not.toThrow();
+      expect(() =>
+        actions.addRecurringCost(data, { ...rentInput, startDate: "2026-01-15" }),
+      ).not.toThrow();
+    });
+
+    // This is the exact bug: a monthly cost is created (startDate "2026-09"),
+    // then the unit dropdown switches it to a day-granular kind WITHOUT
+    // touching startDate — the only way a real edit reaches this, since the
+    // add form always starts as everyNMonths.
+    test("updating just the recurrence kind against an untouched month-only startDate is refused", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, { ...rentInput, startDate: "2026-09" });
+      expect(() =>
+        actions.updateRecurringCost(data, cost.id, { recurrence: { kind: "everyNDays", n: 30 } }),
+      ).toThrow(/day-granular/);
+      expect(() =>
+        actions.updateRecurringCost(data, cost.id, {
+          recurrence: { kind: "everyNWeeks", n: 1, weekday: 3 },
+        }),
+      ).toThrow(/day-granular/);
+      // Refused, so nothing committed — still the original month-granular kind.
+      expect(data.recurring[0]!.recurrence.kind).toBe("everyNMonths");
+    });
+
+    test("updating just startDate to a month-only value against a stored day-granular kind is refused", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, {
+        ...rentInput,
+        startDate: "2026-01-05",
+        recurrence: { kind: "everyNDays", n: 30 },
+      });
+      expect(() => actions.updateRecurringCost(data, cost.id, { startDate: "2026-01" })).toThrow(
+        /day-granular/,
+      );
+    });
+
+    test("updating recurrence and startDate together to a consistent day-granular pair succeeds", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, { ...rentInput, startDate: "2026-09" });
+      actions.updateRecurringCost(data, cost.id, {
+        recurrence: { kind: "everyNDays", n: 30 },
+        startDate: "2026-09-01",
+      });
+      expect(data.recurring[0]!.startDate).toBe("2026-09-01");
+      expect(data.recurring[0]!.recurrence.kind).toBe("everyNDays");
+    });
+
+    // Residual C1: shape alone ("YYYY-MM-DD") is not calendar validity.
+    // September has 30 days, so "2026-09-31" is day-SHAPED but impossible.
+    // `requireStartDateGranularity` used a shape-only regex and let this
+    // through even under everyNMonths; downstream, foldBalances throws
+    // "Invalid day in IsoDate" out of addDays/toDayOrdinal.
+    test("a calendar-impossible startDate is refused, even under everyNMonths", () => {
+      const data = draft();
+      expect(() =>
+        actions.addRecurringCost(data, { ...rentInput, startDate: "2026-09-31" }),
+      ).toThrow(/2026-09-31/);
+
+      const cost = actions.addRecurringCost(data, rentInput);
+      expect(() =>
+        actions.updateRecurringCost(data, cost.id, { startDate: "2026-09-31" }),
+      ).toThrow(/2026-09-31/);
+      // Refused, so nothing committed beyond the one successful add above.
+      expect(data.recurring.length).toBe(1);
+      expect(data.recurring[0]!.startDate).toBe(rentInput.startDate);
+    });
+
+    // Second half of the same reproduction: even if a calendar-impossible
+    // startDate is already sitting in the draft (e.g. from data written
+    // before this fix existed), switching the recurrence kind must not wave
+    // it through — requireStartDateGranularity re-validates on every update,
+    // not only ones that touch startDate.
+    test("switching kind against an already-impossible stored startDate is refused", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, rentInput);
+      // Bypass the public API to simulate a bad value already on disk.
+      data.recurring[0]!.startDate = "2026-09-31";
+      expect(() =>
+        actions.updateRecurringCost(data, cost.id, { recurrence: { kind: "everyNDays", n: 7 } }),
+      ).toThrow(/2026-09-31/);
+      expect(data.recurring[0]!.recurrence.kind).toBe("everyNMonths");
+    });
+
+    // Residual C1: monthOf's regex used to be unanchored (`/^(\d{4})-(\d{2})/`
+    // with no trailing `$`), so it matched a "YYYY-MM" PREFIX of a longer,
+    // malformed string and silently dropped the rest.
+    test("an unanchored-month-shaped garbage value is refused", () => {
+      const data = draft();
+      expect(() =>
+        actions.addRecurringCost(data, { ...rentInput, startDate: "2026-091" }),
+      ).toThrow(/2026-091/);
+
+      const cost = actions.addRecurringCost(data, rentInput);
+      expect(() =>
+        actions.updateRecurringCost(data, cost.id, { startDate: "2026-091" }),
+      ).toThrow(/2026-091/);
+    });
+
+    test("legitimate calendar-valid dates still pass", () => {
+      const data = draft();
+      expect(() => actions.addRecurringCost(data, { ...rentInput, startDate: "2026-09" })).not.toThrow();
+      expect(() =>
+        actions.addRecurringCost(data, {
+          ...rentInput,
+          startDate: "2024-02-29", // 2024 is a leap year
+          recurrence: { kind: "everyNDays", n: 1 },
+        }),
+      ).not.toThrow();
+      expect(() =>
+        actions.addRecurringCost(data, {
+          ...rentInput,
+          startDate: "2026-02-28", // 2026 is not a leap year
+          recurrence: { kind: "everyNDays", n: 1 },
+        }),
+      ).not.toThrow();
+    });
+  });
+
+  test("ending sets both endedFrom and archived", () => {
+    const data = draft();
+    const cost = actions.addRecurringCost(data, rentInput);
+    actions.endRecurringCost(data, cost.id, "2026-06");
+
+    expect(data.recurring[0]!.endedFrom).toBe("2026-06");
+    expect(data.recurring[0]!.archived).toBe(true);
+  });
+
+  test("restoring clears both", () => {
+    const data = draft();
+    const cost = actions.addRecurringCost(data, rentInput);
+    actions.endRecurringCost(data, cost.id, "2026-06");
+    actions.restoreRecurringCost(data, cost.id);
+
+    expect(data.recurring[0]!.endedFrom).toBeUndefined();
+    expect(data.recurring[0]!.archived).toBe(false);
+  });
+
+  describe("setRecurringCostEndedFrom", () => {
+    test("setting a date ends AND archives, whether it is past or future", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, rentInput);
+
+      actions.setRecurringCostEndedFrom(data, cost.id, "2020-01"); // past
+      expect(data.recurring[0]!.endedFrom).toBe("2020-01");
+      expect(data.recurring[0]!.archived).toBe(true);
+
+      actions.setRecurringCostEndedFrom(data, cost.id, "2099-06"); // future
+      expect(data.recurring[0]!.endedFrom).toBe("2099-06");
+      expect(data.recurring[0]!.archived).toBe(true);
+    });
+
+    test("clearing (undefined) un-ends AND un-archives — the column doubles as un-end", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, rentInput);
+      actions.setRecurringCostEndedFrom(data, cost.id, "2026-06");
+
+      actions.setRecurringCostEndedFrom(data, cost.id, undefined);
+      expect(data.recurring[0]!.endedFrom).toBeUndefined();
+      expect(data.recurring[0]!.archived).toBe(false);
+    });
+
+    test("a past or future endedFrom set through the store action takes effect in the projection", () => {
+      // Integration check for the "Ends" column: the store write and the
+      // domain walk agree, for both directions — a backdated cancellation
+      // (import-only before this change) and a forward-dated one.
+      const past = draft();
+      const pastCost = actions.addRecurringCost(past, rentInput); // starts 2026-01
+      actions.setRecurringCostEndedFrom(past, pastCost.id, "2026-03"); // backdated
+      const pastOccurrences = occurrencesByMonth(past, "2026-06").get("2026-01") ?? [];
+      expect(pastOccurrences.length).toBe(1); // Jan still occurred
+      expect(occurrencesByMonth(past, "2026-06").has("2026-03")).toBe(false); // Mar+ stopped
+
+      const future = draft();
+      const futureCost = actions.addRecurringCost(future, rentInput);
+      actions.setRecurringCostEndedFrom(future, futureCost.id, "2026-08"); // forward-dated
+      const futureByMonth = occurrencesByMonth(future, "2026-09");
+      expect(futureByMonth.has("2026-07")).toBe(true); // still occurs right up to the cutoff
+      expect(futureByMonth.has("2026-08")).toBe(false); // stopped from the cutoff onward
+    });
+
+    test("endRecurringCost and restoreRecurringCost now delegate here, so all three stay coherent", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, rentInput);
+
+      actions.endRecurringCost(data, cost.id, "2026-06");
+      expect(data.recurring[0]!.archived).toBe(true);
+
+      actions.setRecurringCostEndedFrom(data, cost.id, undefined);
+      expect(data.recurring[0]!.archived).toBe(false);
+
+      actions.setRecurringCostEndedFrom(data, cost.id, "2027-01");
+      expect(data.recurring[0]!.archived).toBe(true);
+
+      actions.restoreRecurringCost(data, cost.id);
+      expect(data.recurring[0]!.endedFrom).toBeUndefined();
+      expect(data.recurring[0]!.archived).toBe(false);
+    });
+  });
+
+  test("moving swaps order with its neighbour", () => {
+    const data = draft();
+    const first = actions.addRecurringCost(data, rentInput);
+    const second = actions.addRecurringCost(data, { ...rentInput, name: "Phone" });
+    actions.moveRecurringCost(data, second.id, -1);
+
+    expect(data.recurring.find((c) => c.id === second.id)!.order).toBe(0);
+    expect(data.recurring.find((c) => c.id === first.id)!.order).toBe(1);
+  });
+});
+
+describe("confirmOccurrence", () => {
+  function draft(): Dataset {
+    const data = createSeedDataset("2026-01");
+    data.posts[0]!.id = "housing";
+    actions.addRecurringCost(data, {
+      name: "Rent",
+      archived: false,
+      amount: { amount: 8000, currency: "DKK" },
+      startDate: "2026-01",
+      recurrence: { kind: "everyNMonths", n: 1 },
+      anchoring: "calendar",
+      splitMode: "percent",
+      splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+    });
+    return data;
+  }
+
+  test("writes an ordinary purchase carrying the slot it claims", () => {
+    const data = draft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-03");
+
+    expect(purchase.source).toEqual({ recurringId: data.recurring[0]!.id, occurrenceDate: "2026-03" });
+    expect(purchase.date).toBe("2026-03");
+    expect(purchase.total).toEqual({ amount: 8000, currency: "DKK" });
+    expect(purchase.description).toBe("Rent");
+    expect(purchase.schedule).toBeNull();
+    expect(data.purchases.length).toBe(1);
+  });
+
+  test("the purchase date may differ from the slot — this is the data-cap case", () => {
+    const data = draft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-03", { date: "2026-02-12" });
+
+    expect(purchase.source!.occurrenceDate).toBe("2026-03");
+    expect(purchase.date).toBe("2026-02-12");
+  });
+
+  test("an overridden amount is what gets recorded", () => {
+    const data = draft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-03", {
+      amount: { amount: 8250, currency: "DKK" },
+    });
+    expect(purchase.total.amount).toBe(8250);
+  });
+
+  test("the month the purchase lands in is created, so income can be entered", () => {
+    const data = draft();
+    actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-05");
+    expect(data.months.some((m) => m.id === "2026-05")).toBe(true);
+  });
+
+  test("splits are copied, not shared with the cost", () => {
+    const data = draft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-03");
+    purchase.splits[0]!.value = 50;
+    expect(data.recurring[0]!.splits[0]!.value).toBe(100);
+  });
+
+  test("an unknown cost throws", () => {
+    expect(() => actions.confirmOccurrence(draft(), "nope", "2026-03")).toThrow(/Unknown recurring cost/);
+  });
+});
+
+/**
+ * Confirming a slot writes an ORDINARY purchase, and the ordinary purchase
+ * dialog can then edit its date — an action with nothing on its face to do
+ * with recurring costs. Under `lastCharge` anchoring that date is what the
+ * walk measures the next occurrence from, so moving it back far enough makes
+ * the walk step backwards and throw out of `foldBalances`, taking every month
+ * route, the year view and the summary down together. The write is refused
+ * here so that state cannot be reached.
+ */
+describe("editing a confirmation's date", () => {
+  function carDraft(anchoring: "calendar" | "lastCharge" = "lastCharge"): Dataset {
+    const data = createSeedDataset("2026-08");
+    data.posts[0]!.id = "housing";
+    actions.addRecurringCost(data, {
+      name: "Car insurance",
+      archived: false,
+      amount: { amount: 900, currency: "DKK" },
+      startDate: "2026-08-14",
+      recurrence: { kind: "everyNDays", n: 30 },
+      anchoring,
+      splitMode: "percent",
+      splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+    });
+    return data;
+  }
+
+  /** The walk every month route, the year view and the summary go through. */
+  function folds(data: Dataset): () => unknown {
+    return () => occurrencesByMonth(data, "2026-12");
+  }
+
+  function dateOf(data: Dataset, purchaseId: string): string {
+    return data.purchases.find((p) => p.id === purchaseId)!.date;
+  }
+
+  test("a date more than one cycle before the slot it claims is refused", () => {
+    const data = carDraft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-09-13", {
+      date: "2026-09-13",
+    });
+    expect(folds(data)).not.toThrow();
+
+    expect(() => actions.updatePurchase(data, purchase.id, { date: "2026-08-01" })).toThrow(
+      /Car insurance/,
+    );
+    expect(dateOf(data, purchase.id)).toBe("2026-09-13");
+    expect(folds(data)).not.toThrow();
+  });
+
+  test("a date that keeps the series advancing is still allowed", () => {
+    const data = carDraft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-09-13", {
+      date: "2026-09-13",
+    });
+
+    actions.updatePurchase(data, purchase.id, { date: "2026-09-08" });
+    expect(dateOf(data, purchase.id)).toBe("2026-09-08");
+    expect(folds(data)).not.toThrow();
+  });
+
+  test("a purchase with no slot is an ordinary purchase and moves freely", () => {
+    const data = carDraft();
+    const purchase = actions.addPurchase(data, {
+      date: "2026-09-13",
+      description: "Sofa",
+      total: { amount: 100, currency: "DKK" },
+      splitMode: "percent",
+      splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+      schedule: null,
+    });
+
+    actions.updatePurchase(data, purchase.id, { date: "2026-01-01" });
+    expect(dateOf(data, purchase.id)).toBe("2026-01-01");
+    expect(folds(data)).not.toThrow();
+  });
+
+  test("a calendar-anchored cost's confirmation moves freely, because it never rebases", () => {
+    const data = carDraft("calendar");
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-09-13", {
+      date: "2026-09-13",
+    });
+
+    actions.updatePurchase(data, purchase.id, { date: "2026-08-01" });
+    expect(dateOf(data, purchase.id)).toBe("2026-08-01");
+    expect(folds(data)).not.toThrow();
+  });
+
+  test("a slot naming a cost that no longer exists does not block the edit", () => {
+    const data = carDraft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-09-13", {
+      date: "2026-09-13",
+    });
+    data.recurring = [];
+
+    actions.updatePurchase(data, purchase.id, { date: "2026-08-01" });
+    expect(dateOf(data, purchase.id)).toBe("2026-08-01");
   });
 });

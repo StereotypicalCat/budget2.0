@@ -38,6 +38,10 @@ interface RowCells {
   charges: string;
   remaining: string;
   remainingTone: string;
+  /** What is left once unconfirmed recurring bills are counted too. Always
+   *  rendered in the muted ink token, never toned, so `remaining` stays the
+   *  one figure the eye lands on first. */
+  projected: string;
   segments: MeterSegment[];
 }
 
@@ -59,6 +63,7 @@ function postRowCells({ figures }: MonthPostRow, fmt: MoneyFormat): RowCells {
     charges: fmt.amount(figures.charges),
     remaining: fmt.signedAmount(figures.remaining),
     remainingTone: figures.remaining < 0 ? "text-overspend" : "",
+    projected: fmt.signedAmount(figures.projected),
     segments: carryMeterSegments(figures),
   };
 }
@@ -70,7 +75,9 @@ function postRowCells({ figures }: MonthPostRow, fmt: MoneyFormat): RowCells {
 export function PostTableLegend({ baseCurrency }: { baseCurrency: Currency }) {
   return (
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span>All figures in {baseCurrency}.</span>
+      <span>
+        All figures in {baseCurrency}. Projected subtracts bills not yet confirmed.
+      </span>
       <Swatch token="--surplus" label="carried in" />
       <Swatch token="--budget-accent" label="spent" />
       <Swatch token="--budget-rule" label="unspent" />
@@ -178,6 +185,7 @@ export function PostTable({ monthId, rows, onChangeRule }: Props) {
               <th className="py-2 pl-6 text-right font-medium">Allocated</th>
               <th className="py-2 pl-6 text-right font-medium">Spent</th>
               <th className="py-2 pl-6 text-right font-medium">Remaining</th>
+              <th className="py-2 pl-6 text-right font-medium">Projected</th>
             </tr>
           </thead>
           {/* One tbody per post, holding the figures AND their meter. Multiple
@@ -214,11 +222,14 @@ export function PostTable({ monthId, rows, onChangeRule }: Props) {
                   >
                     {cells.remaining}
                   </td>
+                  <td className="font-money pb-0 pl-6 pt-3 text-right text-budget-ink-muted">
+                    {cells.projected}
+                  </td>
                 </tr>
                 {/* The meter IS the row divider: tight under its own figures,
                     with the gap below it. */}
                 <tr className="transition-colors group-hover:bg-accent/60">
-                  <td colSpan={5} className="px-0 pb-4 pt-1.5">
+                  <td colSpan={6} className="px-0 pb-4 pt-1.5">
                     <Meter segments={cells.segments} className="h-1" />
                   </td>
                 </tr>
@@ -254,6 +265,9 @@ export function PostTable({ monthId, rows, onChangeRule }: Props) {
                 </span>
                 <span>
                   spent <span className="font-money">{cells.charges}</span>
+                </span>
+                <span>
+                  projected <span className="font-money">{cells.projected}</span>
                 </span>
                 {/* Pushed to the right end of the line it wraps onto, so six
                     of these down a phone screen read as a quiet affordance

@@ -1,5 +1,7 @@
 import type { Currency, CurrencyDef, Dataset, MonthId } from "../domain/types.ts";
 import { migrate } from "../store/migrations.ts";
+import { monthOf } from "../domain/months.ts";
+import { toDayOrdinal } from "../domain/days.ts";
 
 export class ImportValidationError extends Error {
   constructor(message: string) {
@@ -35,6 +37,18 @@ const MONTH_ID = /^\d{4}-(0[1-9]|1[0-2])$/;
  * throwing out of `monthOf()` deep inside the balance fold.
  */
 const PURCHASE_DATE = /^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/;
+/**
+ * The day-granular subset of `PURCHASE_DATE`: "YYYY-MM-DD" only, no month-only
+ * form. `everyNDays` and `everyNWeeks` hand `startDate` straight to `addDays`
+ * (`src/domain/occurrences.ts`), which throws on a month-only date — so those
+ * kinds need this narrower shape, checked here rather than three months later
+ * inside a fold.
+ */
+const DAY_GRANULAR_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+const ANCHORINGS = new Set(["calendar", "lastCharge"]);
+const RECURRENCE_KINDS = new Set(["everyNMonths", "everyNDays", "everyNWeeks"]);
+const SPLIT_MODES = new Set(["percent", "fixed"]);
 
 /**
  * `Currency` is an open string now, so this — not the type system — is what
@@ -119,10 +133,106 @@ function requireArray(data: Record<string, unknown>, key: string): unknown[] {
 }
 
 /**
+ * `n` is checked hard rather than clamped. The projection walk in
+ * `domain/occurrences.ts` terminates only if every step strictly advances, and
+ * a clamped zero would silently give the owner a schedule their file does not
+ * describe. Rejecting tells them the file is wrong; clamping tells them
+ * nothing and quietly changes a bill.
+ */
+function requireRecurrence(recurrence: any, label: string): void {
+  if (!recurrence || !RECURRENCE_KINDS.has(recurrence.kind)) {
+    throw new ImportValidationError(
+      `${label} has a recurrence of unknown kind "${String(recurrence?.kind)}"`,
+    );
+  }
+  if (typeof recurrence.n !== "number" || !Number.isInteger(recurrence.n)) {
+    throw new ImportValidationError(
+      `${label} has a recurrence interval that is not a whole number: ${String(recurrence.n)}`,
+    );
+  }
+  if (recurrence.n < 1) {
+    throw new ImportValidationError(
+      `${label} has a recurrence interval of ${recurrence.n}; it must be at least 1`,
+    );
+  }
+  if (recurrence.kind === "everyNWeeks") {
+    const { weekday } = recurrence;
+    if (typeof weekday !== "number" || !Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+      throw new ImportValidationError(
+        `${label} has a weekday of ${String(weekday)}; it must be 0-6, where 0 is Sunday`,
+      );
+    }
+  }
+}
+
+/**
+ * Shared by the purchases loop and the recurring-costs loop below — the only
+ * two places a `splitMode`/`splits` pair occurs, and both feed the identical
+ * `distributeByWeight`/`distributeByAmount` branch in `domain/charges.ts`.
+ * One helper means the two write paths cannot silently drift into checking
+ * to different standards; the two loops used to each carry their own copy of
+ * the "no splits" / "one absorber" / "unknown post" checks, so this replaces
+ * both rather than adding a third copy.
+ *
+ * `splitMode` must be one of the two known modes: `charges.ts` picks its
+ * distribution function with `splitMode === "percent" ? ... : ...`, so any
+ * OTHER string silently takes the "fixed" branch and treats an intended
+ * percentage as an absolute amount — a silently wrong number, not a throw.
+ *
+ * Every split's `value` must be a finite number. A non-finite value (missing,
+ * a string, NaN, Infinity) would otherwise propagate through
+ * `distributeByWeight`/`distributeByAmount` as NaN, and `roundMoney(NaN,
+ * digits)` returns NaN rather than throwing — it would corrupt a total
+ * silently, deep inside the fold.
+ *
+ * NEGATIVE values, values over 100, and splits that do not sum to the total
+ * are all deliberately UNCHECKED — AGENTS.md lists these as intentional
+ * (a refund is a normal line, and the absorbing split reconciles the sum by
+ * design). Only non-numbers are rejected here.
+ */
+function requireSplits(
+  splits: unknown,
+  splitMode: unknown,
+  label: string,
+  postIds: ReadonlySet<string>,
+): void {
+  if (!SPLIT_MODES.has(splitMode as string)) {
+    throw new ImportValidationError(
+      `${label} has an unknown splitMode "${String(splitMode)}"`,
+    );
+  }
+  if (!Array.isArray(splits) || splits.length === 0) {
+    throw new ImportValidationError(`${label} has no splits; at least one split is required`);
+  }
+  const absorbers = (splits as Array<Record<string, unknown>>).filter(
+    (s) => s?.absorbsRemainder,
+  ).length;
+  if (absorbers !== 1) {
+    throw new ImportValidationError(
+      `${label} has ${absorbers} splits flagged absorbsRemainder; exactly one is required`,
+    );
+  }
+  for (const split of splits as Array<Record<string, unknown>>) {
+    if (!postIds.has(split?.postId as string)) {
+      throw new ImportValidationError(`${label} references unknown post "${String(split?.postId)}"`);
+    }
+    if (typeof split?.value !== "number" || !Number.isFinite(split.value)) {
+      throw new ImportValidationError(
+        `${label} has a split value that is not a finite number: ${String(split?.value)}`,
+      );
+    }
+  }
+}
+
+/**
  * Validates far enough that the fold cannot throw on the imported data: every
  * split points at a real post, every purchase has exactly one remainder
- * absorber, every MonthId parses, and every rule version resolves
- * unambiguously to a number rather than to NaN or a missing rate.
+ * absorber, every MonthId parses, every rule version resolves unambiguously
+ * to a number rather than to NaN or a missing rate, and every recurring
+ * cost's startDate is both granular enough for its recurrence kind
+ * (day-granular for everyNDays/everyNWeeks, since occurrencesOf hands it
+ * straight to addDays) and calendar-valid (no "2026-09-31"), since shape and
+ * range alone let an impossible date through.
  */
 export function parseDatasetJson(text: string): Dataset {
   let raw: unknown;
@@ -210,6 +320,75 @@ export function parseDatasetJson(text: string): Dataset {
     }
   }
 
+  const recurring = requireArray(data, "recurring") as any[];
+  dataset.recurring = recurring;
+  // Optional chaining, not `.id` directly: a null/non-object entry must fall
+  // through to the loop below and fail there with an ImportValidationError,
+  // not throw a raw TypeError here while merely collecting ids.
+  const recurringIds = new Set(recurring.map((cost: any) => cost?.id));
+
+  for (const cost of recurring) {
+    if (!cost || typeof cost !== "object") {
+      throw new ImportValidationError(
+        `A recurring cost is missing or not an object: ${JSON.stringify(cost)}`,
+      );
+    }
+    const label = `Recurring cost "${cost.name}"`;
+    requireCurrency(cost.amount?.currency, label, defined);
+
+    if (!PURCHASE_DATE.test(cost.startDate)) {
+      throw new ImportValidationError(`${label} has an invalid start date "${cost.startDate}"`);
+    }
+    if (cost.endedFrom !== undefined && !PURCHASE_DATE.test(cost.endedFrom)) {
+      throw new ImportValidationError(`${label} has an invalid ended-from date "${cost.endedFrom}"`);
+    }
+    requireRecurrence(cost.recurrence, label);
+    // `everyNMonths` walks through `monthOf`, which accepts either
+    // granularity; the other two kinds reach `addDays` and need a
+    // day-granular startDate specifically. `endedFrom` needs no such check —
+    // it is only ever compared lexicographically, never fed to `addDays`.
+    const dayGranular = DAY_GRANULAR_DATE.test(cost.startDate);
+    if (cost.recurrence.kind !== "everyNMonths" && !dayGranular) {
+      throw new ImportValidationError(
+        `${label} has a "${cost.recurrence.kind}" recurrence but a month-only start date "${cost.startDate}"; it needs "YYYY-MM-DD"`,
+      );
+    }
+    // Shape and range (checked above by PURCHASE_DATE/DAY_GRANULAR_DATE) still
+    // let a calendar-impossible date through, e.g. "2026-09-31" (September has
+    // 30 days) or "2026-02-30". Route it through the same domain parsers the
+    // fold itself uses, so an impossible date is refused here instead of
+    // throwing three months later out of `foldBalances`.
+    try {
+      if (dayGranular) toDayOrdinal(cost.startDate);
+      else monthOf(cost.startDate);
+    } catch (error) {
+      throw new ImportValidationError(
+        `${label} has a calendar-impossible start date "${cost.startDate}" (${(error as Error).message})`,
+      );
+    }
+
+    // `endedFrom` carries no granularity rule — checked above by not
+    // requiring it to match the recurrence kind's day-granularity — but it
+    // still has to be a real calendar date, the same way `startDate` does.
+    if (cost.endedFrom !== undefined) {
+      try {
+        if (DAY_GRANULAR_DATE.test(cost.endedFrom)) toDayOrdinal(cost.endedFrom);
+        else monthOf(cost.endedFrom);
+      } catch (error) {
+        throw new ImportValidationError(
+          `${label} has a calendar-impossible ended-from date "${cost.endedFrom}" (${(error as Error).message})`,
+        );
+      }
+    }
+
+    if (!ANCHORINGS.has(cost.anchoring)) {
+      throw new ImportValidationError(
+        `${label} has an unknown anchoring "${String(cost.anchoring)}"`,
+      );
+    }
+    requireSplits(cost.splits, cost.splitMode, label, postIds);
+  }
+
   for (const month of dataset.months) {
     if (!MONTH_ID.test(month.id)) {
       throw new ImportValidationError(`Invalid month id "${month.id}"`);
@@ -224,27 +403,36 @@ export function parseDatasetJson(text: string): Dataset {
     if (!PURCHASE_DATE.test(purchase.date)) {
       throw new ImportValidationError(`${label} has an invalid date "${purchase.date}"`);
     }
-    if (purchase.splits.length === 0) {
-      throw new ImportValidationError(`${label} has no splits; at least one split is required`);
-    }
-    const absorbers = purchase.splits.filter((s) => s.absorbsRemainder).length;
-    if (absorbers !== 1) {
-      throw new ImportValidationError(
-        `${label} has ${absorbers} splits flagged absorbsRemainder; exactly one is required`,
-      );
-    }
-    for (const split of purchase.splits) {
-      if (!postIds.has(split.postId)) {
-        throw new ImportValidationError(
-          `${label} references unknown post "${split.postId}"`,
-        );
-      }
-    }
+    requireSplits(purchase.splits, purchase.splitMode, label, postIds);
     for (const slice of purchase.schedule?.slices ?? []) {
       if (!MONTH_ID.test(slice.month)) {
         throw new ImportValidationError(`${label} has invalid slice month "${slice.month}"`);
       }
       requireCurrency(slice.amount.currency, `${label} slice ${slice.month}`, defined);
+    }
+
+    if (purchase.source !== undefined) {
+      // `null` is not `undefined`, so it reaches here without being "no
+      // source". The field is typed as absent-or-object, never null, so a
+      // null (or any other non-object) is malformed input, not a missing
+      // field — reject it cleanly rather than dereferencing it into a raw
+      // TypeError. `schedule?.slices ?? []` two blocks up is the same
+      // defensive style applied to a sibling field that IS legitimately null.
+      if (!purchase.source || typeof purchase.source !== "object") {
+        throw new ImportValidationError(
+          `${label} has a source that is not an object: ${JSON.stringify(purchase.source)}`,
+        );
+      }
+      if (!recurringIds.has(purchase.source.recurringId)) {
+        throw new ImportValidationError(
+          `${label} names unknown recurring cost "${purchase.source.recurringId}"`,
+        );
+      }
+      if (!PURCHASE_DATE.test(purchase.source.occurrenceDate)) {
+        throw new ImportValidationError(
+          `${label} has an invalid occurrence date "${purchase.source.occurrenceDate}"`,
+        );
+      }
     }
   }
 

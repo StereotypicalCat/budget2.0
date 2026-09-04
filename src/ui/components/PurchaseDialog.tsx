@@ -43,7 +43,7 @@ interface Props {
 
 export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
   const dataset = useDataset();
-  const { mutate } = useMutate();
+  const { mutate, error, clearError } = useMutate();
   const activePosts = dataset.posts
     .filter((p) => !p.archived)
     .sort((a, b) => a.order - b.order);
@@ -74,23 +74,25 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
     setBulk(emptyBulkDraft(monthId, activePosts[0]?.id ?? ""));
   }
 
+  // A write can be REFUSED, not merely fail on a full disk: editing the date
+  // of a purchase that confirms a recurring occurrence is rejected when the
+  // new date would stop the series advancing. Closing the dialog regardless
+  // would show the user a save that silently did nothing, so the dialog stays
+  // open and shows `error` instead. `mutate` never rejects.
   function save() {
     if (errors.length > 0) return;
-    if (bulkMode) {
-      // One mutate for the whole batch: a single write, one queue entry, and no
-      // way to half-commit a shopping trip.
-      const created = toPurchases(bulk);
-      mutate((data) => {
-        for (const p of created) addPurchase(data, p);
-      });
-    } else {
-      mutate((data) => {
-        if (purchase) updatePurchase(data, purchase.id, toPurchase(draft));
-        else addPurchase(data, toPurchase(draft));
-      });
-    }
-    setOpen(false);
-    if (!purchase) reset();
+    // One mutate for the whole batch: a single write, one queue entry, and no
+    // way to half-commit a shopping trip.
+    const created = bulkMode ? toPurchases(bulk) : null;
+    void mutate((data) => {
+      if (created) for (const p of created) addPurchase(data, p);
+      else if (purchase) updatePurchase(data, purchase.id, toPurchase(draft));
+      else addPurchase(data, toPurchase(draft));
+    }).then((saved) => {
+      if (!saved) return;
+      setOpen(false);
+      if (!purchase) reset();
+    });
   }
 
   return (
@@ -98,7 +100,10 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next) reset();
+        if (next) {
+          reset();
+          clearError();
+        }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
@@ -320,6 +325,12 @@ export function PurchaseDialog({ monthId, purchase, trigger }: Props) {
                 <li key={message}>{message}</li>
               ))}
             </ul>
+          )}
+
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              Could not save: {error}
+            </p>
           )}
         </div>
 

@@ -8,15 +8,16 @@ decisions behind it are in `docs/specs/` — one spec per sub-project,
 each recording the alternatives that were rejected. Rules that outlived their
 task moved to `AGENTS.md`.
 
-**Current state:** merged to `main`. 464 tests passing,
+**Current state:** merged to `main`. 583 tests passing,
 `bunx tsc --noEmit` clean, `bun run build` succeeds on both the live-fetch and
 offline paths.
 
-**Schema is at version 5.** v1 -> v2 made allocation rules a dated series;
+**Schema is at version 7.** v1 -> v2 made allocation rules a dated series;
 v2 -> v3 moved currencies into the dataset; v3 -> v4 drops a stored rate-service
-URL that can no longer work; v4 -> v5 adds sterling to an existing dataset. All
-four are behaviour-preserving by construction — not one changes a stored figure
-— and are tested as such.
+URL that can no longer work; v4 -> v5 adds sterling to an existing dataset;
+v5 -> v6 collapses per-currency decimals into one dataset-wide setting; v6 -> v7
+adds `Dataset.recurring`. All six are behaviour-preserving by construction —
+not one changes a stored figure — and are tested as such.
 
 A migration applies **on load, in memory**; it is written back on the next
 mutation, not by `load()` itself. So a freshly migrated dataset shows the new
@@ -140,3 +141,14 @@ Genuinely outstanding:
   focus placement after a row auto-appends. Drivable over CDP in principle; not
   yet done.
 - **GitHub Actions** has never been executed.
+- **Whether two-stage confirmation matches how the owner actually reconciles a
+  bank statement.** Recurring costs (`docs/specs/2026-09-03-recurring-costs-design.md`)
+  project expected occurrences and require a click to turn one into a real
+  purchase, rather than charging automatically. That is a product bet a week of
+  real use answers and no test can.
+- **The overdue count against a large, real backlog.** `ExpectedBand` counts
+  unconfirmed occurrences from earlier months, and demo data does now
+  accumulate a modest one (a few months of an unconfirmed monthly bill plus a
+  biweekly one, ~14 occurrences by September) that renders without incident.
+  Nobody has seen the count or the layout against years of neglect or dozens of
+  distinct bills.

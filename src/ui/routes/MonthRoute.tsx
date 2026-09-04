@@ -15,6 +15,7 @@ import { sliceAmountForMonth } from "../../domain/charges.ts";
 import { useMoneyFormat } from "../hooks/useMoneyFormat.ts";
 import { PostTable, PostTableLegend } from "../components/PostTable.tsx";
 import { PurchaseDialog } from "../components/PurchaseDialog.tsx";
+import { ExpectedBand } from "../components/ExpectedBand.tsx";
 import { Meter } from "../components/Meter.tsx";
 import { Section, Stat } from "../components/Section.tsx";
 import { allocatedPercentOfIncome, allocationMeterSegments } from "../meterSegments.ts";
@@ -123,6 +124,8 @@ export function MonthRoute() {
           </p>
         </div>
       </Section>
+
+      <ExpectedBand monthId={monthId} />
 
       <Section
         title="Posts"

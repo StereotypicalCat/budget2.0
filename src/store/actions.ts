@@ -1,12 +1,15 @@
 import { newId } from "../domain/seed.ts";
 import { compareMonths, monthOf } from "../domain/months.ts";
+import { toDayOrdinal } from "../domain/days.ts";
 import { roundMoney } from "../domain/money.ts";
 import { currencyUsage, normalizeCurrencyCode } from "../domain/currencies.ts";
+import { wouldAdvancePast } from "../domain/occurrences.ts";
 import type {
   Currency,
   CurrencyDef,
   Dataset,
   FxRate,
+  IsoDate,
   Money,
   Month,
   MonthId,
@@ -14,6 +17,9 @@ import type {
   PostId,
   Purchase,
   PurchaseId,
+  Recurrence,
+  RecurringCost,
+  RecurringCostId,
   Rule,
   RuleVersion,
   Schedule,
@@ -215,12 +221,58 @@ export function addPurchase(
   return created;
 }
 
+/**
+ * A confirmation's `date` is TRUTH, and under `lastCharge` anchoring it is
+ * what `occurrencesOf` measures the NEXT occurrence from. Moved back far
+ * enough, the step from it lands at or before the slot the purchase claims,
+ * and the walk throws its "did not advance" error — out of `foldBalances`, so
+ * every month route, the year view and the summary go down at once, from an
+ * edit made in the ordinary purchase dialog that never mentioned recurring
+ * costs. Refusing the write is the only place that state can be prevented:
+ * the walk's throw is correct and must not be softened, and by the time it
+ * fires the bad data is already saved.
+ *
+ * `wouldAdvancePast` answers exactly this question and is what `ExpectedBand`
+ * asks before OFFERING a row; both must agree with the walk, so neither
+ * re-derives the condition.
+ *
+ * Two deliberate pass-throughs. A purchase with no slot is an ordinary
+ * purchase and is not checked at all — this is the hot path for every
+ * ordinary edit. A slot naming a cost that no longer exists is not checked
+ * either: a dangling source is a separate concern, and refusing here would
+ * only strand the purchase.
+ */
+function requireConfirmationAdvances(
+  draft: Dataset,
+  purchase: Purchase,
+  source: Purchase["source"],
+  date: IsoDate,
+): void {
+  if (!source) return;
+  const cost = draft.recurring.find((c) => c.id === source.recurringId);
+  if (!cost) return;
+  if (wouldAdvancePast(cost, source.occurrenceDate, date)) return;
+  throw new Error(
+    `Purchase ${purchase.id} confirms "${cost.name}" for ${source.occurrenceDate}, and ` +
+      `dating it ${date} would not move the series past that occurrence — ` +
+      `pick a later date, or delete the purchase to un-confirm the occurrence`,
+  );
+}
+
 export function updatePurchase(
   draft: Dataset,
   purchaseId: PurchaseId,
   changes: Partial<Omit<Purchase, "id">>,
 ): void {
   const purchase = requirePurchase(draft, purchaseId);
+  if (changes.date !== undefined && changes.date !== purchase.date) {
+    requireConfirmationAdvances(
+      draft,
+      purchase,
+      "source" in changes ? changes.source : purchase.source,
+      changes.date,
+    );
+  }
   const resolved: Partial<Omit<Purchase, "id">> = { ...changes };
   if (changes.total) {
     resolved.total = roundMoneyValue(draft, changes.total);
@@ -361,4 +413,216 @@ export function setDigits(draft: Dataset, digits: number): void {
 export function setBaseCurrency(draft: Dataset, currency: Currency): void {
   draft.settings.baseCurrency = currency;
   draft.fxRates = draft.fxRates.filter((r) => r.currency !== currency);
+}
+
+function requireRecurringCost(draft: Dataset, id: RecurringCostId): RecurringCost {
+  const cost = draft.recurring.find((c) => c.id === id);
+  if (!cost) throw new Error(`Unknown recurring cost: ${id}`);
+  return cost;
+}
+
+/**
+ * The projection walk in `domain/occurrences.ts` terminates only if every step
+ * strictly advances, and `n` is what guarantees that. The JSON importer checks
+ * the same thing; this is the other write path, and both have to hold or the
+ * fold can hang.
+ */
+function requireRecurrence(recurrence: Recurrence): Recurrence {
+  if (!Number.isInteger(recurrence.n)) {
+    throw new Error(`A recurrence interval must be a whole number, not ${recurrence.n}`);
+  }
+  if (recurrence.n < 1) {
+    throw new Error(`A recurrence interval must be at least 1, not ${recurrence.n}`);
+  }
+  if (recurrence.kind === "everyNWeeks") {
+    if (!Number.isInteger(recurrence.weekday) || recurrence.weekday < 0 || recurrence.weekday > 6) {
+      throw new Error(`A weekday must be 0-6 (0 is Sunday), not ${recurrence.weekday}`);
+    }
+  }
+  return recurrence;
+}
+
+const DAY_GRANULAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * `everyNMonths` walks the cursor through `monthOf`, so it tolerates either
+ * granularity of `startDate`. `everyNDays` and `everyNWeeks` hand it straight
+ * to `addDays`, which throws on a month-only date — so those kinds require a
+ * day-granular `startDate` here, at the boundary, rather than three months
+ * later when a fold walks off the end of it.
+ *
+ * Shape alone is not enough: "2026-09-31" is day-SHAPED but calendar-
+ * impossible (September has 30 days), and would otherwise reach `addDays` (or
+ * sit unnoticed under `everyNMonths`) and throw three months later out of the
+ * fold instead of here. Route a day-granular value through `toDayOrdinal` and
+ * a month-granular one through `monthOf` — both already throw on exactly
+ * that — and translate whatever they throw into this file's own error style.
+ */
+function requireStartDateGranularity(recurrence: Recurrence, startDate: IsoDate): void {
+  const dayGranular = DAY_GRANULAR_DATE.test(startDate);
+  if (recurrence.kind !== "everyNMonths" && !dayGranular) {
+    throw new Error(
+      `A "${recurrence.kind}" recurrence needs a day-granular startDate ("YYYY-MM-DD"), not "${startDate}"`,
+    );
+  }
+  try {
+    if (dayGranular) toDayOrdinal(startDate);
+    else monthOf(startDate);
+  } catch (error) {
+    throw new Error(
+      `A "${recurrence.kind}" recurrence needs a valid startDate, not "${startDate}" (${(error as Error).message})`,
+    );
+  }
+}
+
+export function addRecurringCost(
+  draft: Dataset,
+  cost: Omit<RecurringCost, "id" | "order">,
+): RecurringCost {
+  const recurrence = requireRecurrence(cost.recurrence);
+  requireStartDateGranularity(recurrence, cost.startDate);
+  const created: RecurringCost = {
+    ...cost,
+    id: newId(),
+    order: draft.recurring.length,
+    recurrence,
+    amount: roundMoneyValue(draft, cost.amount),
+    splits: roundSplits(draft, cost.splits, cost.splitMode, cost.amount.currency),
+  };
+  draft.recurring.push(created);
+  return created;
+}
+
+/**
+ * `archived` and `endedFrom` are excluded on purpose: they are a coherent
+ * pair (`archived` mirrors "`endedFrom` is set") maintained ONLY by
+ * `setRecurringCostEndedFrom`, and a caller able to pass either through here
+ * could desynchronise them — a bill that reads as live but is dimmed, or
+ * ended but not. Route a change to either field through
+ * `setRecurringCostEndedFrom` (or its `endRecurringCost`/`restoreRecurringCost`
+ * convenience wrappers) instead.
+ */
+export function updateRecurringCost(
+  draft: Dataset,
+  id: RecurringCostId,
+  changes: Partial<Omit<RecurringCost, "id" | "archived" | "endedFrom">>,
+): void {
+  const cost = requireRecurringCost(draft, id);
+  const resolved: Partial<Omit<RecurringCost, "id" | "archived" | "endedFrom">> = { ...changes };
+
+  if (changes.recurrence) {
+    resolved.recurrence = requireRecurrence(changes.recurrence);
+  }
+  // Runs on every update, not just one that touches recurrence or startDate:
+  // either field alone can break the pairing (a kind flip against an
+  // untouched month-only startDate is exactly how this bug was reached).
+  requireStartDateGranularity(
+    resolved.recurrence ?? cost.recurrence,
+    resolved.startDate ?? cost.startDate,
+  );
+  if (changes.amount) {
+    resolved.amount = roundMoneyValue(draft, changes.amount);
+  }
+  if (changes.splits) {
+    // Either field may be absent from a partial update; the stored cost
+    // supplies whichever one is, so the mode and currency always agree with
+    // the values being rounded.
+    resolved.splits = roundSplits(
+      draft,
+      changes.splits,
+      changes.splitMode ?? cost.splitMode,
+      (resolved.amount ?? cost.amount).currency,
+    );
+  }
+
+  Object.assign(cost, resolved);
+}
+
+export function moveRecurringCost(
+  draft: Dataset,
+  id: RecurringCostId,
+  direction: -1 | 1,
+): void {
+  const ordered = [...draft.recurring].sort((a, b) => a.order - b.order);
+  const index = ordered.findIndex((c) => c.id === id);
+  const target = index + direction;
+  if (index === -1 || target < 0 || target >= ordered.length) return;
+  const a = ordered[index]!;
+  const b = ordered[target]!;
+  [a.order, b.order] = [b.order, a.order];
+}
+
+/**
+ * Sets or clears `endedFrom` directly — what the Settings "Ends" column edits
+ * — keeping `archived` coherent with it. The rule: `archived` mirrors
+ * "`endedFrom` is set", same as `endRecurringCost`/`restoreRecurringCost`
+ * below, which now both delegate here. That is what stops the two fields
+ * diverging into a bill that reads as live but is dimmed, or ended but not.
+ *
+ * Both fields, because they mean different things: `endedFrom` stops the
+ * PROJECTION, and `archived` only flags the row — same as a post, it stays
+ * listed (sorted in, rendered at reduced opacity) rather than being filtered
+ * out. Archiving alone would leave the bill projecting forever; setting
+ * `endedFrom` alone would leave a dead bill undimmed in the list. Neither
+ * touches a past occurrence, so no historical figure moves.
+ *
+ * `endedFrom` itself is unchecked here — no granularity rule applies to it
+ * (§10; it is only ever compared lexicographically, never reaches
+ * `addDays`) — so the caller validates it is a real `IsoDate` before this is
+ * called, the same way the "Starts" field already does for `startDate`.
+ */
+export function setRecurringCostEndedFrom(
+  draft: Dataset,
+  id: RecurringCostId,
+  endedFrom: IsoDate | undefined,
+): void {
+  const cost = requireRecurringCost(draft, id);
+  if (endedFrom === undefined) {
+    delete cost.endedFrom;
+    cost.archived = false;
+  } else {
+    cost.endedFrom = endedFrom;
+    cost.archived = true;
+  }
+}
+
+/** The one-click convenience: stop a bill from `from` onward and dim it. */
+export function endRecurringCost(draft: Dataset, id: RecurringCostId, from: IsoDate): void {
+  setRecurringCostEndedFrom(draft, id, from);
+}
+
+/** The one-click convenience: clear the cancellation and un-dim the row. */
+export function restoreRecurringCost(draft: Dataset, id: RecurringCostId): void {
+  setRecurringCostEndedFrom(draft, id, undefined);
+}
+
+/**
+ * Turns one projected occurrence into a real purchase.
+ *
+ * `occurrenceDate` is the slot being claimed and goes into `source`;
+ * `overrides.date` is when the money actually moved and goes on the purchase.
+ * They differ whenever a bill is paid off schedule, and under `lastCharge`
+ * anchoring it is the latter that rebases the series — which is the whole of
+ * the phone-bill behaviour.
+ *
+ * Deleting the purchase later un-confirms the slot, with nothing to reconcile.
+ */
+export function confirmOccurrence(
+  draft: Dataset,
+  recurringId: RecurringCostId,
+  occurrenceDate: IsoDate,
+  overrides: { date?: IsoDate; amount?: Money } = {},
+): Purchase {
+  const cost = requireRecurringCost(draft, recurringId);
+  return addPurchase(draft, {
+    date: overrides.date ?? occurrenceDate,
+    description: cost.name,
+    total: overrides.amount ?? cost.amount,
+    splitMode: cost.splitMode,
+    // Copied, not shared: editing the purchase's splits must not rewrite the
+    // cost's, and `mutate` clones the draft rather than deep-freezing it.
+    splits: cost.splits.map((split) => ({ ...split })),
+    schedule: null,
+    source: { recurringId, occurrenceDate },
+  });
 }

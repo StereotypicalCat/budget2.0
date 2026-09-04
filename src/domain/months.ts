@@ -23,8 +23,14 @@ function fromOrdinal(ordinal: number): MonthId {
   return format(Math.floor(ordinal / 12), (ordinal % 12) + 1);
 }
 
+// Anchored at both ends: "YYYY-MM" or "YYYY-MM-DD" only, never a prefix of
+// something longer. Dual acceptance (with or without a day) is deliberate and
+// load-bearing — do not narrow it to one form. An unanchored match once let
+// "2026-091" through as September 2026, silently dropping the trailing "1".
+const MONTH_OF_DATE = /^(\d{4})-(\d{2})(?:-\d{2})?$/;
+
 export function monthOf(date: IsoDate): MonthId {
-  const match = /^(\d{4})-(\d{2})/.exec(date);
+  const match = MONTH_OF_DATE.exec(date);
   if (!match) throw new Error(`Invalid IsoDate: ${date}`);
   const month = Number(match[2]);
   if (month < 1 || month > 12) throw new Error(`Invalid IsoDate: ${date}`);

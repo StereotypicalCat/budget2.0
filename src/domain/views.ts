@@ -28,8 +28,18 @@ export interface MonthViewModel {
 }
 
 function hasActivity(figures: PostMonthFigures): boolean {
+  // `remaining` and `projected` are both fully derived from these five raw
+  // fields, so checking all five is what keeps a post visible whenever either
+  // column would show a nonzero figure. `expected` and `projectedCarriedIn`
+  // are the two the recurring-costs feature added: an archived post whose
+  // only activity this month is an unconfirmed occurrence has a zero
+  // `remaining` but a nonzero `projected`, and must not be dropped.
   return (
-    figures.carriedIn !== 0 || figures.allocation !== 0 || figures.charges !== 0
+    figures.carriedIn !== 0 ||
+    figures.allocation !== 0 ||
+    figures.charges !== 0 ||
+    figures.expected !== 0 ||
+    figures.projectedCarriedIn !== 0
   );
 }
 
