@@ -126,8 +126,21 @@ export function occurrencesOf(
     // makes an early charge rebase the series. An unconfirmed occurrence steps
     // from its own projected date: the projection assumes bills are paid on
     // time, and self-corrects as they are confirmed.
+    //
+    // For `everyNMonths`, "moved" means the confirmation's MONTH, and paying
+    // a few days before the month turns over is ordinary — it must not rebase
+    // the series backwards. So a month-granular step runs from whichever is
+    // later, the cursor or the confirmation's month; an early payment within
+    // the same month simply does not rebase. Day/week-granular kinds keep
+    // stepping from the confirmation's exact date, unchanged.
     const from =
-      cost.anchoring === "lastCharge" && confirmation ? confirmation.date : cursor;
+      cost.anchoring === "lastCharge" && confirmation
+        ? cost.recurrence.kind === "everyNMonths"
+          ? compareMonths(monthOf(confirmation.date), cursor) > 0
+            ? confirmation.date
+            : cursor
+          : confirmation.date
+        : cursor;
     const next = stepFrom(from, cost.recurrence);
 
     // The loop terminates only if the step strictly increases. `n >= 1` is
@@ -138,13 +151,16 @@ export function occurrencesOf(
     if (!isBefore(cursor, next)) {
       // Two causes, and the message names both because they need different
       // fixes. With a valid `n >= 1` a CALENDAR series can never reach this:
-      // every kind adds at least one day. Only `lastCharge` can, and only when
-      // a confirmation is dated more than one step before the slot it claims.
+      // every kind adds at least one day. Only `lastCharge` can, and only for
+      // a day/week-granular kind whose confirmation is dated far enough
+      // before the slot it claims that stepping from it still lands at or
+      // before the cursor — `everyNMonths` never reaches this branch, because
+      // it never steps from a confirmation earlier than the cursor.
       throw new Error(
         `Recurring cost "${cost.name}" did not advance past ${cursor} (produced ${next}). ` +
           (confirmation
             ? `Purchase ${confirmation.id} claims that slot but is dated ${confirmation.date}, ` +
-              `more than one step earlier — correct its date to move the series forward.`
+              `which does not move the series past ${cursor} — correct its date so the series advances.`
             : `A recurrence must move strictly forward; check that n is at least 1.`),
       );
     }

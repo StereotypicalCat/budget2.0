@@ -188,6 +188,32 @@ describe("occurrencesOf — lastCharge anchoring: the phone bill", () => {
   });
 });
 
+describe("occurrencesOf — lastCharge anchoring: a monthly bill paid early (I3)", () => {
+  const rent = cost({
+    startDate: "2026-08",
+    recurrence: { kind: "everyNMonths", n: 1 },
+    anchoring: "lastCharge",
+  });
+
+  test("paying a few days before month-end does not throw or rebase", () => {
+    // The slot is 2026-09; the owner pays on the 28th of August, four days
+    // early. That is completely ordinary and must not move the series
+    // backwards or make it fail to advance.
+    const paidEarly = new Map([["2026-09", confirmation("2026-09", "2026-08-28", "pE")]]);
+    const dates = occurrencesOf(rent, paidEarly, "2026-10").map((o) => o.date);
+    expect(dates).toEqual(["2026-08", "2026-09", "2026-10"]);
+  });
+
+  test("paying after the month it was for rebases forward, same as the phone bill", () => {
+    // Paid on 2026-09-05 for the 2026-08 slot: the confirmation's month is
+    // AFTER the cursor, so (mirroring the day-granular cap-hit case) the
+    // series rebases from there.
+    const paidLate = new Map([["2026-08", confirmation("2026-08", "2026-09-05", "pL")]]);
+    const dates = occurrencesOf(rent, paidLate, "2026-11").map((o) => o.date);
+    expect(dates).toEqual(["2026-08", "2026-10", "2026-11"]);
+  });
+});
+
 describe("occurrencesOf — termination", () => {
   test("a confirmation dated absurdly early throws rather than walking backwards", () => {
     // The ONLY way a valid recurrence fails to advance. Under lastCharge the
