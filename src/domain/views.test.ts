@@ -122,6 +122,40 @@ describe("monthView", () => {
       "old",
     ]);
   });
+
+  test("an archived post with only an unconfirmed occurrence still appears, with its projected figure (I4)", () => {
+    // "old" has a zero-percent rule (no allocation) and no purchases at all,
+    // so carriedIn/allocation/charges are all zero this month — its only
+    // figure is the unconfirmed recurring occurrence's `expected`/`projected`.
+    // Before I4's fix, hasActivity ignored those two fields and dropped the
+    // row, even though ExpectedBand lists the same occurrence.
+    const withRecurring: Dataset = {
+      ...data,
+      posts: [...data.posts, post("old", 2, 0, true)],
+      recurring: [
+        {
+          id: "r1",
+          name: "Storage unit",
+          order: 0,
+          archived: false,
+          amount: { amount: 400, currency: "DKK" },
+          startDate: "2026-01",
+          recurrence: { kind: "everyNMonths", n: 1 },
+          anchoring: "calendar",
+          splitMode: "percent",
+          splits: [{ postId: "old", value: 100, absorbsRemainder: true }],
+        },
+      ],
+    };
+    const view = monthView(withRecurring, "2026-01");
+    const row = view.rows.find((r) => r.post.id === "old");
+    expect(row).toBeDefined();
+    expect(row!.figures.carriedIn).toBe(0);
+    expect(row!.figures.allocation).toBe(0);
+    expect(row!.figures.charges).toBe(0);
+    expect(row!.figures.expected).toBe(400);
+    expect(row!.figures.projected).toBe(-400);
+  });
 });
 
 describe("yearView", () => {
