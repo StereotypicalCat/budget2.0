@@ -62,6 +62,14 @@ describe("validation", () => {
     expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/purchases/);
   });
 
+  test("rejects a non-array recurring field instead of silently importing it as empty (M7)", () => {
+    // The other four sibling collections already go through requireArray;
+    // recurring used to fall back to [] instead of being rejected here.
+    const data = populated() as any;
+    data.recurring = "not an array";
+    expect(() => parseDatasetJson(JSON.stringify(data))).toThrow(/recurring/);
+  });
+
   test("rejects a purchase whose splits reference an unknown post", () => {
     const data = populated();
     data.purchases[0]!.splits[0]!.postId = "ghost";
@@ -304,6 +312,40 @@ describe("recurring cost validation", () => {
   test("a fractional interval is refused", () => {
     expect(() => parseDatasetJson(withRecurring([{ ...valid, recurrence: { kind: "everyNDays", n: 1.5 } }])))
       .toThrow(/whole number/);
+  });
+
+  test("everyNMonths accepts either startDate granularity (C1)", () => {
+    expect(parseDatasetJson(withRecurring([{ ...valid, startDate: "2026-01" }])).recurring.length).toBe(1);
+    expect(parseDatasetJson(withRecurring([{ ...valid, startDate: "2026-01-15" }])).recurring.length).toBe(1);
+  });
+
+  test("everyNDays with a month-only startDate is refused (C1)", () => {
+    // This is the exact reachable bug: occurrencesOf hands a month-only
+    // startDate straight to addDays for a day-granular kind and throws deep
+    // inside the fold. Reject it here instead, at the import boundary.
+    expect(() =>
+      parseDatasetJson(
+        withRecurring([{ ...valid, startDate: "2026-01", recurrence: { kind: "everyNDays", n: 30 } }]),
+      ),
+    ).toThrow(/month-only start date/);
+  });
+
+  test("everyNWeeks with a month-only startDate is refused (C1)", () => {
+    expect(() =>
+      parseDatasetJson(
+        withRecurring([
+          { ...valid, startDate: "2026-01", recurrence: { kind: "everyNWeeks", n: 1, weekday: 2 } },
+        ]),
+      ),
+    ).toThrow(/month-only start date/);
+  });
+
+  test("everyNDays with a day-granular startDate is accepted (C1)", () => {
+    expect(
+      parseDatasetJson(
+        withRecurring([{ ...valid, startDate: "2026-01-05", recurrence: { kind: "everyNDays", n: 30 } }]),
+      ).recurring.length,
+    ).toBe(1);
   });
 
   test("an unknown recurrence kind is refused", () => {

@@ -35,6 +35,14 @@ const MONTH_ID = /^\d{4}-(0[1-9]|1[0-2])$/;
  * throwing out of `monthOf()` deep inside the balance fold.
  */
 const PURCHASE_DATE = /^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/;
+/**
+ * The day-granular subset of `PURCHASE_DATE`: "YYYY-MM-DD" only, no month-only
+ * form. `everyNDays` and `everyNWeeks` hand `startDate` straight to `addDays`
+ * (`src/domain/occurrences.ts`), which throws on a month-only date — so those
+ * kinds need this narrower shape, checked here rather than three months later
+ * inside a fold.
+ */
+const DAY_GRANULAR_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 const ANCHORINGS = new Set(["calendar", "lastCharge"]);
 const RECURRENCE_KINDS = new Set(["everyNMonths", "everyNDays", "everyNWeeks"]);
@@ -217,8 +225,11 @@ function requireSplits(
 /**
  * Validates far enough that the fold cannot throw on the imported data: every
  * split points at a real post, every purchase has exactly one remainder
- * absorber, every MonthId parses, and every rule version resolves
- * unambiguously to a number rather than to NaN or a missing rate.
+ * absorber, every MonthId parses, every rule version resolves unambiguously
+ * to a number rather than to NaN or a missing rate, and every recurring
+ * cost's startDate is granular enough for its recurrence kind (day-granular
+ * for everyNDays/everyNWeeks, since occurrencesOf hands it straight to
+ * addDays).
  */
 export function parseDatasetJson(text: string): Dataset {
   let raw: unknown;
@@ -306,7 +317,7 @@ export function parseDatasetJson(text: string): Dataset {
     }
   }
 
-  const recurring = Array.isArray(data.recurring) ? (data.recurring as any[]) : [];
+  const recurring = requireArray(data, "recurring") as any[];
   dataset.recurring = recurring;
   // Optional chaining, not `.id` directly: a null/non-object entry must fall
   // through to the loop below and fail there with an ImportValidationError,
@@ -329,6 +340,15 @@ export function parseDatasetJson(text: string): Dataset {
       throw new ImportValidationError(`${label} has an invalid ended-from date "${cost.endedFrom}"`);
     }
     requireRecurrence(cost.recurrence, label);
+    // `everyNMonths` walks through `monthOf`, which accepts either
+    // granularity; the other two kinds reach `addDays` and need a
+    // day-granular startDate specifically. `endedFrom` needs no such check —
+    // it is only ever compared lexicographically, never fed to `addDays`.
+    if (cost.recurrence.kind !== "everyNMonths" && !DAY_GRANULAR_DATE.test(cost.startDate)) {
+      throw new ImportValidationError(
+        `${label} has a "${cost.recurrence.kind}" recurrence but a month-only start date "${cost.startDate}"; it needs "YYYY-MM-DD"`,
+      );
+    }
 
     if (!ANCHORINGS.has(cost.anchoring)) {
       throw new ImportValidationError(
