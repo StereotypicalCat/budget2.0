@@ -93,7 +93,9 @@ describe("the fold at zero decimals", () => {
         digits: DIGITS,
       },
       currencies: CURRENCIES,
-      fxRates: [],
+      fxRates: [
+        { currency: "USD", baseUnitsPerOne: 151.234567, updatedAt: "2026-01-01", source: "manual" },
+      ],
       posts: [
         {
           id: "food",
@@ -103,27 +105,80 @@ describe("the fold at zero decimals", () => {
           currency: "JPY",
           rules: [{ from: "2026-01", rule: { kind: "percentOfIncome", percent: 33.333 } }],
         },
+        // Never budgeted (rules: []) — allocation is always zero, so this
+        // post's only figures are what the recurring cost below projects onto
+        // it. Isolates the expected/projected track from the allocation math
+        // "food" already covers.
+        {
+          id: "fun",
+          name: "Fun",
+          order: 1,
+          archived: false,
+          currency: "JPY",
+          rules: [],
+        },
       ],
       months: [
         { id: "2026-01", income: { amount: 10_000, currency: "JPY" }, ruleOverrides: {} },
         { id: "2026-02", income: { amount: 10_000, currency: "JPY" }, ruleOverrides: {} },
       ],
       purchases: [],
-      recurring: [],
+      // Unconfirmed on purpose: a confirmed occurrence becomes an ordinary
+      // Purchase and would be counted as `charges`, not `expected` — the
+      // wrong track for this guard. $7 at 151.234567 converts to a non-whole
+      // 1058.641969, and split 3/4 (fixed, not percent — the OTHER split
+      // mode) divides unevenly too, so both the FX conversion and the split
+      // division are exercised at zero decimals.
+      recurring: [
+        {
+          id: "gym",
+          name: "Gym",
+          order: 0,
+          archived: false,
+          amount: { amount: 7, currency: "USD" },
+          startDate: "2026-01",
+          recurrence: { kind: "everyNMonths", n: 1 },
+          anchoring: "calendar",
+          splitMode: "fixed",
+          splits: [
+            { postId: "food", value: 3, absorbsRemainder: false },
+            { postId: "fun", value: 0, absorbsRemainder: true },
+          ],
+        },
+      ],
     };
   }
 
   test("no figure the fold produces has a fractional yen in it", () => {
     const fold = foldBalances(dataset(), "2026-02");
     for (const month of ["2026-01", "2026-02"]) {
-      const figures = figuresFor(fold, "food", month);
-      for (const [name, value] of Object.entries(figures)) {
-        expect(Number.isInteger(value)).toBe(true);
-        expect(`${month} ${name} = ${value}`).toBe(`${month} ${name} = ${Math.round(value)}`);
+      for (const postId of ["food", "fun"]) {
+        const figures = figuresFor(fold, postId, month);
+        for (const [name, value] of Object.entries(figures)) {
+          expect(Number.isInteger(value)).toBe(true);
+          expect(`${postId} ${month} ${name} = ${value}`).toBe(
+            `${postId} ${month} ${name} = ${Math.round(value)}`,
+          );
+        }
       }
     }
     expect(figuresFor(fold, "food", "2026-01").allocation).toBe(3333);
     expect(figuresFor(fold, "food", "2026-02").carriedIn).toBe(3333);
+
+    // The recurring cost's $7 converts to ¥1059, split 3/4 (fixed) onto
+    // food/fun — a wrong implementation that rounds either the FX conversion
+    // or the split at 2 decimals produces fractional yen here, which the
+    // Number.isInteger sweep above would already fail; these pin the exact
+    // whole-unit figures so a regression names the wrong number, not just
+    // "not an integer".
+    expect(figuresFor(fold, "food", "2026-01").expected).toBe(454);
+    expect(figuresFor(fold, "food", "2026-01").projected).toBe(2879);
+    expect(figuresFor(fold, "fun", "2026-01").expected).toBe(605);
+    expect(figuresFor(fold, "fun", "2026-01").projected).toBe(-605);
+    // Second month: the cost recurs, so the projected balance keeps
+    // absorbing it — proof this is a running division, not a one-off.
+    expect(figuresFor(fold, "food", "2026-02").projected).toBe(5758);
+    expect(figuresFor(fold, "fun", "2026-02").projected).toBe(-1210);
   });
 
   test("the month view's totals are whole units too", () => {
@@ -131,6 +186,13 @@ describe("the fold at zero decimals", () => {
     expect(Number.isInteger(view.totalAllocation)).toBe(true);
     expect(Number.isInteger(view.unallocated)).toBe(true);
     expect(view.unallocated).toBe(10_000 - 3333);
+    // The view embeds each post's expected/projected figures too — same
+    // sweep as the fold test above, through the view's own aggregation path.
+    for (const row of view.rows) {
+      for (const [name, value] of Object.entries(row.figures)) {
+        expect(Number.isInteger(value)).toBe(true);
+      }
+    }
   });
 
   /**
@@ -141,5 +203,13 @@ describe("the fold at zero decimals", () => {
     const twoPlaces = { ...dataset(), settings: { ...dataset().settings, digits: 2 } };
     const fold = foldBalances(twoPlaces, "2026-01");
     expect(figuresFor(fold, "food", "2026-01").allocation).toBe(3333.3);
+
+    // Same recurring cost, same $7 — at two decimals the FX conversion and
+    // the fixed split both leave a fraction: 3333 → 3333.3, and the projected
+    // track moves right along with it.
+    expect(figuresFor(fold, "food", "2026-01").expected).toBe(453.7);
+    expect(figuresFor(fold, "food", "2026-01").projected).toBe(2879.6);
+    expect(figuresFor(fold, "fun", "2026-01").expected).toBe(604.94);
+    expect(figuresFor(fold, "fun", "2026-01").projected).toBe(-604.94);
   });
 });
