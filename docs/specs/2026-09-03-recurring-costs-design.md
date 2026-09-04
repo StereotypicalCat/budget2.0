@@ -305,18 +305,62 @@ reference the cost.
 
 **`RecurringSection` in Settings**, alongside `PostsSection` — the same CRUD,
 reorder and archive idiom, because a recurring cost is defined once and then
-left alone. Definition is not the repeated act.
+left alone. Definition is not the repeated act. An **"Ends" column** lets the
+owner type a cancellation date directly, doing exactly what the "end"/"restart"
+button does; both go through `setRecurringCostEndedFrom`, the one place that
+keeps `endedFrom` and `archived` paired (§9, and `DECISIONS.md`). Dating a
+cancellation in the future dims the row immediately even though it keeps
+projecting rows until `endedFrom` — a visible consequence of that pairing,
+recorded in `DECISIONS.md` rather than treated as a bug. `updateRecurringCost`
+does not accept `archived` or `endedFrom` at all, so a caller cannot split the
+pair even by mistake.
 
 **An "Expected" band in the month view**, which is where the repeated act
-happens. Each unconfirmed occurrence for the month is one row with a one-click
-confirm that writes the purchase at the expected date and amount. The amount is
-editable inline before confirming, because paying a different figure is the
-common case rather than the exception; anything more unusual is edited
-afterwards like any other purchase. Entry speed is a product principle, and a
-dialog per bill would defeat it.
+happens, in two groups:
 
-**The overdue count** — unconfirmed occurrences from earlier months — appears in
-that band. §5 is otherwise silent drift.
+- **This month's unconfirmed occurrences** (`pending`). Each is one row with a
+  one-click confirm that writes the purchase at the expected date and amount.
+  The amount is editable inline before confirming, because paying a different
+  figure is the common case rather than the exception; anything more unusual is
+  edited afterwards like any other purchase. Entry speed is a product
+  principle, and a dialog per bill would defeat it. Confirming here records
+  the slot's own date — the projection assumes bills are paid on time, and a
+  `lastCharge` series only rebases when the recorded date says otherwise.
+- **"Coming up"**: at most one row per cost, its next unconfirmed occurrence
+  strictly after the displayed month, out to a bounded `horizonMonths` (twelve
+  by default — a read-ahead bound on one function call, nothing stored; see
+  AGENTS.md §1). Confirming a coming-up row records TODAY, not the future
+  slot — paying a `lastCharge` bill early, before its projected date arrives,
+  is exactly what rebases the series, and recording anything else would defeat
+  the point. A this-month row's subtitle is just its date; a coming-up row's
+  says "Due `<slot>` — confirming now records it `<today>`" so the early date
+  is never a surprise. `recordedDateFor(group, today)` is the one function that
+  decides which date a click records — extracted specifically so that decision
+  has a test that fails if its two branches are swapped, since nothing else in
+  the suite would catch it.
+
+  A coming-up row is only ever OFFERED when confirming it would leave the
+  series coherent, checked before the purchase is ever written rather than
+  disabled-with-an-explanation after the fact:
+
+  - **Never for a cost with an unconfirmed occurrence in the displayed month or
+    any earlier foldable month.** Settle the earlier bill first; offering a
+    later one while an earlier sits outstanding would let confirming the later
+    one leave the earlier projection standing, silently double-counting the
+    bill.
+  - **Never for a pairing `occurrencesOf`'s walk could not survive.** A
+    `lastCharge` bill recorded today for a slot far enough in the future can
+    rebase the series BACKWARDS — the walk's own "did not advance" throw, which
+    is correct and stays a throw (AGENTS.md §2). `wouldAdvancePast` (in
+    `domain/occurrences.ts`, built on the same `stepFrom` the walk uses)
+    answers this without re-deriving the rule.
+
+  Both checks omit the row outright rather than rendering it disabled: nobody
+  asked for an explanation of why they can't pay early yet.
+
+**The overdue count** — unconfirmed occurrences from earlier, foldable
+months — appears in that band too, and shares its foldability bound with the
+coherence check above.
 
 Three existing rules apply directly to the inline amount field: capture
 `event.target.value` into a `const` before `mutate` (AGENTS.md §2, the
@@ -337,12 +381,23 @@ fixed. The field itself stays `type="text"` and parses through
 - **`domain/fold.test.ts`** — the two convergence invariants from §6.
 - **`store/migrations.test.ts`** — 6 -> 7 adds the empty array and moves no
   figure.
+- **`store/actions.test.ts`** — `updateRecurringCost` rejects a bad recurrence
+  or a granularity mismatch, and (its type alone) cannot touch
+  `archived`/`endedFrom`; `setRecurringCostEndedFrom` keeps the pair coherent
+  through the button and the "Ends" column alike.
 - **`export/json.test.ts`** — acceptance and rejection, including `n: 0`,
   `n: 1.5`, a `weekday` of 7, and an unknown `kind`.
 - **`domain/currencyDigits.test.ts`** — the file now drives the whole dataset
   at zero decimals and asserts that raising the setting to 2 changes what the
   fold produces. The `expected` track joins that sweep, so it cannot be the one
   path that quietly assumes 2.
+- **`ui/components/ExpectedBand.test.ts`** — `resolveExpectedAmount`;
+  `recordedDateFor`, directly, so the this-month/coming-up date decision has a
+  test that fails if its two branches are swapped; `expectedGroups`'s horizon
+  bound and one-row-per-cost dedup; and the coherence rules above, including a
+  regression built from the exact reported shape (a 30-day `lastCharge` cost
+  confirmed today for a slot 39 days out) asserting that confirming everything
+  `expectedGroups` offers and then folding never throws.
 
 `scripts/demo-data.ts` seeds a monthly rent and a 28-day subscription, so the
 band is screenshot-verifiable.

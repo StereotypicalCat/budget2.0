@@ -105,6 +105,17 @@ record.
   happened. Under projection-only this would not have held, and a dated series
   would have been required.
   → [`specs/2026-09-03-recurring-costs-design.md`](specs/2026-09-03-recurring-costs-design.md)
+- **`archived` MIRRORS "`endedFrom` is set"**, maintained in one place
+  (`setRecurringCostEndedFrom`) rather than two independent fields a caller
+  could desynchronise. `endedFrom` stops the projection; `archived` only dims
+  the row, the same way an archived post stays listed rather than
+  disappearing. Neither touches a past occurrence. One consequence is visible
+  and undocumented until now: dating a cancellation in the future sets
+  `archived` immediately, so a bill still live for months still renders
+  dimmed with a "restart" button while it keeps projecting rows right up to
+  `endedFrom`. Defensible under the rule as chosen, not a bug.
+  → [`specs/2026-09-03-recurring-costs-design.md`](specs/2026-09-03-recurring-costs-design.md),
+  `src/store/actions.ts`
 
 ## Design system
 

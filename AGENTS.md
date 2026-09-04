@@ -49,9 +49,13 @@ and `docs/specs/`, and is not repeated here.
   objects.
 - **A recurring cost's occurrences are COMPUTED, never stored.** `Dataset`
   holds the rule and the confirmations; `occurrencesByMonth` derives the rest
-  on every fold. There is no horizon and no "generate ahead" step, and
-  `upToMonth` comes from the caller so `src/domain/` stays clock-free. Storing
-  them would reintroduce the materialised snapshot the original design rejected.
+  on every fold, and `upToMonth` comes from the caller so `src/domain/` stays
+  clock-free. Nothing is ever written ahead of time — `ExpectedBand`'s
+  `horizonMonths` only widens how far a single read-only walk looks before
+  throwing its result away; it is a DISPLAY bound on one function call, not a
+  "generate ahead" step, and nothing it produces is persisted. Storing
+  occurrences would reintroduce the materialised snapshot the original design
+  rejected.
 - **On a confirmation, `Purchase.date` is TRUTH and `source.occurrenceDate` is
   IDENTITY.** The slot is what a confirmation claims, so the projector stops
   emitting it; the date is when the money moved, so the fold counts it there.
