@@ -367,6 +367,20 @@ export function parseDatasetJson(text: string): Dataset {
       );
     }
 
+    // `endedFrom` carries no granularity rule — checked above by not
+    // requiring it to match the recurrence kind's day-granularity — but it
+    // still has to be a real calendar date, the same way `startDate` does.
+    if (cost.endedFrom !== undefined) {
+      try {
+        if (DAY_GRANULAR_DATE.test(cost.endedFrom)) toDayOrdinal(cost.endedFrom);
+        else monthOf(cost.endedFrom);
+      } catch (error) {
+        throw new ImportValidationError(
+          `${label} has a calendar-impossible ended-from date "${cost.endedFrom}" (${(error as Error).message})`,
+        );
+      }
+    }
+
     if (!ANCHORINGS.has(cost.anchoring)) {
       throw new ImportValidationError(
         `${label} has an unknown anchoring "${String(cost.anchoring)}"`,

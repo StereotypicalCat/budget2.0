@@ -302,6 +302,27 @@ describe("recurring cost validation", () => {
       .toThrow(/ended-from date/);
   });
 
+  // Same residual-C1 gap as startDate: PURCHASE_DATE checks shape and digit
+  // range, not calendar validity, so "2026-02-30" passes it. §10: endedFrom
+  // carries no granularity rule, but it must still be a real date.
+  test("a calendar-impossible endedFrom is refused (day- or month-shaped)", () => {
+    expect(() => parseDatasetJson(withRecurring([{ ...valid, endedFrom: "2026-02-30" }])))
+      .toThrow(/calendar-impossible ended-from/);
+    expect(() => parseDatasetJson(withRecurring([{ ...valid, endedFrom: "2026-02-29" }]))) // not a leap year
+      .toThrow(/calendar-impossible ended-from/);
+  });
+
+  test("a valid endedFrom of either granularity is accepted, regardless of recurrence kind", () => {
+    expect(
+      parseDatasetJson(withRecurring([{ ...valid, endedFrom: "2026-06" }])).recurring.length,
+    ).toBe(1);
+    expect(
+      parseDatasetJson(
+        withRecurring([{ ...valid, endedFrom: "2026-06-17" }]), // month-only recurrence, day-granular end
+      ).recurring.length,
+    ).toBe(1);
+  });
+
   test("an interval below 1 is refused, not clamped", () => {
     // Clamping would silently change the bill's schedule. The walk in
     // occurrences.ts cannot terminate without this.

@@ -9,6 +9,7 @@ import {
   endRecurringCost,
   moveRecurringCost,
   restoreRecurringCost,
+  setRecurringCostEndedFrom,
   updateRecurringCost,
 } from "../../../store/actions.ts";
 import { parseMoneyInput } from "../../moneyInput.ts";
@@ -47,6 +48,31 @@ export function isValidStartDate(value: string, kind: Recurrence["kind"]): boole
   try {
     if (kind === "everyNMonths" && !isDayGranular(value)) monthOf(value);
     else toDayOrdinal(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validates the "Ends" column. Unlike `startDate`, `endedFrom` carries NO
+ * granularity rule (§10 of the design) — it is only ever compared
+ * lexicographically via `isBefore` in `domain/occurrences.ts` and never
+ * reaches `addDays`, so a month-only cancellation is exactly as valid as a
+ * day-granular one regardless of the cost's recurrence kind. It still has to
+ * be a real calendar date: "2026-02-30" is refused the same way an
+ * impossible `startDate` already is.
+ *
+ * An empty string is valid — it means "clear the cancellation" — and is what
+ * lets the field double as the un-end control.
+ *
+ * Exported for `RecurringSection.test.ts`.
+ */
+export function isValidEndedFrom(value: string): boolean {
+  if (value === "") return true;
+  try {
+    if (isDayGranular(value)) toDayOrdinal(value);
+    else monthOf(value);
     return true;
   } catch {
     return false;
@@ -190,6 +216,7 @@ export function RecurringSection() {
                 <th className="py-2 font-medium">Every</th>
                 <th className="py-2 font-medium">Measured from</th>
                 <th className="py-2 font-medium">Starts</th>
+                <th className="py-2 font-medium">Ends</th>
                 <th className="py-2" />
               </tr>
             </thead>
@@ -251,6 +278,36 @@ export function RecurringSection() {
                     />
                   </td>
                   <td className="py-2">
+                    {/* Same idiom as "Starts": uncontrolled, committed on
+                        blur, keyed on the stored value so an external change
+                        (the end/restart button, or a rejected edit) shows up
+                        rather than leaving stale typed text. Empty means "not
+                        ended" and is itself a valid value — clearing it here
+                        does the same thing as the "restart" button. */}
+                    <Input
+                      key={`${cost.id}-ends-${cost.endedFrom ?? ""}`}
+                      className="h-8 w-32"
+                      type="text"
+                      placeholder="—"
+                      aria-label={`Ends date for ${cost.name}`}
+                      defaultValue={cost.endedFrom ?? ""}
+                      onBlur={(event) => {
+                        const typed = event.target.value.trim();
+                        if (!isValidEndedFrom(typed)) {
+                          event.target.value = cost.endedFrom ?? "";
+                          return;
+                        }
+                        mutate((draft) =>
+                          setRecurringCostEndedFrom(
+                            draft,
+                            cost.id,
+                            typed === "" ? undefined : typed,
+                          ),
+                        );
+                      }}
+                    />
+                  </td>
+                  <td className="py-2">
                     <div className="flex items-center justify-end gap-1">
                       <Button
                         size="xs"
@@ -292,10 +349,12 @@ export function RecurringSection() {
       )}
 
       <p className="mt-3 max-w-[70ch] text-xs leading-relaxed text-budget-ink-muted">
-        Ending a cost stops it from this month onward and leaves every past
-        occurrence exactly as it was. Changing the amount only moves occurrences
-        that have not been confirmed yet — what you already paid is recorded on
-        the purchases themselves, so a price rise never rewrites history.
+        Ending a cost — from the "end" button, or by typing a date into
+        "Ends" directly — stops it from that date onward and leaves every past
+        occurrence exactly as it was; clearing the date restarts it. Changing
+        the amount only moves occurrences that have not been confirmed yet —
+        what you already paid is recorded on the purchases themselves, so a
+        price rise never rewrites history.
       </p>
 
       <div className="mt-5 flex flex-wrap items-end gap-2 border-t border-budget-rule pt-5">

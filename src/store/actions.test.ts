@@ -1,6 +1,7 @@
 import { test, expect, describe } from "bun:test";
 import * as actions from "./actions.ts";
 import { createSeedDataset } from "../domain/seed.ts";
+import { occurrencesByMonth } from "../domain/occurrences.ts";
 import type { Dataset } from "../domain/types.ts";
 
 /**
@@ -682,6 +683,68 @@ describe("recurring costs", () => {
 
     expect(data.recurring[0]!.endedFrom).toBeUndefined();
     expect(data.recurring[0]!.archived).toBe(false);
+  });
+
+  describe("setRecurringCostEndedFrom", () => {
+    test("setting a date ends AND archives, whether it is past or future", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, rentInput);
+
+      actions.setRecurringCostEndedFrom(data, cost.id, "2020-01"); // past
+      expect(data.recurring[0]!.endedFrom).toBe("2020-01");
+      expect(data.recurring[0]!.archived).toBe(true);
+
+      actions.setRecurringCostEndedFrom(data, cost.id, "2099-06"); // future
+      expect(data.recurring[0]!.endedFrom).toBe("2099-06");
+      expect(data.recurring[0]!.archived).toBe(true);
+    });
+
+    test("clearing (undefined) un-ends AND un-archives — the column doubles as un-end", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, rentInput);
+      actions.setRecurringCostEndedFrom(data, cost.id, "2026-06");
+
+      actions.setRecurringCostEndedFrom(data, cost.id, undefined);
+      expect(data.recurring[0]!.endedFrom).toBeUndefined();
+      expect(data.recurring[0]!.archived).toBe(false);
+    });
+
+    test("a past or future endedFrom set through the store action takes effect in the projection", () => {
+      // Integration check for the "Ends" column: the store write and the
+      // domain walk agree, for both directions — a backdated cancellation
+      // (import-only before this change) and a forward-dated one.
+      const past = draft();
+      const pastCost = actions.addRecurringCost(past, rentInput); // starts 2026-01
+      actions.setRecurringCostEndedFrom(past, pastCost.id, "2026-03"); // backdated
+      const pastOccurrences = occurrencesByMonth(past, "2026-06").get("2026-01") ?? [];
+      expect(pastOccurrences.length).toBe(1); // Jan still occurred
+      expect(occurrencesByMonth(past, "2026-06").has("2026-03")).toBe(false); // Mar+ stopped
+
+      const future = draft();
+      const futureCost = actions.addRecurringCost(future, rentInput);
+      actions.setRecurringCostEndedFrom(future, futureCost.id, "2026-08"); // forward-dated
+      const futureByMonth = occurrencesByMonth(future, "2026-09");
+      expect(futureByMonth.has("2026-07")).toBe(true); // still occurs right up to the cutoff
+      expect(futureByMonth.has("2026-08")).toBe(false); // stopped from the cutoff onward
+    });
+
+    test("endRecurringCost and restoreRecurringCost now delegate here, so all three stay coherent", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, rentInput);
+
+      actions.endRecurringCost(data, cost.id, "2026-06");
+      expect(data.recurring[0]!.archived).toBe(true);
+
+      actions.setRecurringCostEndedFrom(data, cost.id, undefined);
+      expect(data.recurring[0]!.archived).toBe(false);
+
+      actions.setRecurringCostEndedFrom(data, cost.id, "2027-01");
+      expect(data.recurring[0]!.archived).toBe(true);
+
+      actions.restoreRecurringCost(data, cost.id);
+      expect(data.recurring[0]!.endedFrom).toBeUndefined();
+      expect(data.recurring[0]!.archived).toBe(false);
+    });
   });
 
   test("moving swaps order with its neighbour", () => {

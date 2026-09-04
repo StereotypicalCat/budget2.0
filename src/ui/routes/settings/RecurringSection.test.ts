@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isValidStartDate, normalizedStartDateFor } from "./RecurringSection.tsx";
+import { isValidEndedFrom, isValidStartDate, normalizedStartDateFor } from "./RecurringSection.tsx";
 
 // C2: the "Starts" field must never be able to persist an empty or
 // malformed value — `isValidStartDate` is the guard the onBlur handler uses
@@ -49,6 +49,34 @@ describe("isValidStartDate", () => {
     expect(isValidStartDate("2024-02-29", "everyNMonths")).toBe(true); // 2024 is a leap year
     expect(isValidStartDate("2026-02-29", "everyNMonths")).toBe(false); // 2026 is not
     expect(isValidStartDate("2026-02-28", "everyNMonths")).toBe(true);
+  });
+});
+
+// GAP 2 (spec §10): "Ends" needs no granularity rule (unlike "Starts"), but
+// still has to be a real calendar date, and empty must be accepted since it
+// is how the field un-ends a cost.
+describe("isValidEndedFrom", () => {
+  test("an empty string is valid — it means 'not ended'", () => {
+    expect(isValidEndedFrom("")).toBe(true);
+  });
+
+  test("both granularities are valid, unconditionally — no recurrence kind is involved", () => {
+    expect(isValidEndedFrom("2026-09")).toBe(true);
+    expect(isValidEndedFrom("2026-09-17")).toBe(true);
+  });
+
+  test("garbage is rejected", () => {
+    expect(isValidEndedFrom("not-a-date")).toBe(false);
+    expect(isValidEndedFrom("2026-13")).toBe(false);
+  });
+
+  test("a calendar-impossible date is rejected, day- or month-shaped", () => {
+    expect(isValidEndedFrom("2026-02-30")).toBe(false); // no Feb 30
+    expect(isValidEndedFrom("2026-02-29")).toBe(false); // 2026 is not a leap year
+  });
+
+  test("a real leap day is accepted", () => {
+    expect(isValidEndedFrom("2024-02-29")).toBe(true);
   });
 });
 

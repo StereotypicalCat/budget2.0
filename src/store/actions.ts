@@ -497,7 +497,11 @@ export function moveRecurringCost(
 }
 
 /**
- * Stops a bill from `from` onward and dims it in the list.
+ * Sets or clears `endedFrom` directly — what the Settings "Ends" column edits
+ * — keeping `archived` coherent with it. The rule: `archived` mirrors
+ * "`endedFrom` is set", same as `endRecurringCost`/`restoreRecurringCost`
+ * below, which now both delegate here. That is what stops the two fields
+ * diverging into a bill that reads as live but is dimmed, or ended but not.
  *
  * Both fields, because they mean different things: `endedFrom` stops the
  * PROJECTION, and `archived` only flags the row — same as a post, it stays
@@ -505,17 +509,35 @@ export function moveRecurringCost(
  * out. Archiving alone would leave the bill projecting forever; setting
  * `endedFrom` alone would leave a dead bill undimmed in the list. Neither
  * touches a past occurrence, so no historical figure moves.
+ *
+ * `endedFrom` itself is unchecked here — no granularity rule applies to it
+ * (§10; it is only ever compared lexicographically, never reaches
+ * `addDays`) — so the caller validates it is a real `IsoDate` before this is
+ * called, the same way the "Starts" field already does for `startDate`.
  */
-export function endRecurringCost(draft: Dataset, id: RecurringCostId, from: IsoDate): void {
+export function setRecurringCostEndedFrom(
+  draft: Dataset,
+  id: RecurringCostId,
+  endedFrom: IsoDate | undefined,
+): void {
   const cost = requireRecurringCost(draft, id);
-  cost.endedFrom = from;
-  cost.archived = true;
+  if (endedFrom === undefined) {
+    delete cost.endedFrom;
+    cost.archived = false;
+  } else {
+    cost.endedFrom = endedFrom;
+    cost.archived = true;
+  }
 }
 
+/** The one-click convenience: stop a bill from `from` onward and dim it. */
+export function endRecurringCost(draft: Dataset, id: RecurringCostId, from: IsoDate): void {
+  setRecurringCostEndedFrom(draft, id, from);
+}
+
+/** The one-click convenience: clear the cancellation and un-dim the row. */
 export function restoreRecurringCost(draft: Dataset, id: RecurringCostId): void {
-  const cost = requireRecurringCost(draft, id);
-  delete cost.endedFrom;
-  cost.archived = false;
+  setRecurringCostEndedFrom(draft, id, undefined);
 }
 
 /**
