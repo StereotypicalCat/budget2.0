@@ -5,7 +5,11 @@ import { useDataset } from "../hooks/useDataset.ts";
 import { useMutate } from "../hooks/useMutate.ts";
 import { today } from "../../store/index.ts";
 import { confirmOccurrence } from "../../store/actions.ts";
-import { occurrencesByMonth, type Occurrence } from "../../domain/occurrences.ts";
+import {
+  occurrencesByMonth,
+  wouldAdvancePast,
+  type Occurrence,
+} from "../../domain/occurrences.ts";
 import { addMonths, compareMonths } from "../../domain/months.ts";
 import { parseMoneyInput, type CurrencyOption, type ParsedMoney } from "../moneyInput.ts";
 import { Section } from "./Section.tsx";
@@ -33,6 +37,24 @@ export function resolveExpectedAmount(
   return { parsed, invalid: parsed === null };
 }
 
+export type ExpectedRowGroup = "pending" | "comingUp";
+
+/**
+ * What a Confirm click should record, given which group the row is in. A
+ * this-month row confirms at the slot's own date — `null`, `confirmOccurrence`'s
+ * default — and a coming-up row confirms at `today` instead, because it is
+ * being paid early on purpose (see `ExpectedBand`'s doc comment).
+ *
+ * This one branch (previously inlined as `row(occurrence, null)` versus
+ * `row(occurrence, today)`) is the whole of the phone-bill behaviour, and
+ * nothing else in the suite would catch the two being swapped — a DOM test
+ * isn't needed for that, a direct one is. Exported for `ExpectedBand.test.ts`
+ * (X2).
+ */
+export function recordedDateFor(group: ExpectedRowGroup, today: IsoDate): IsoDate | null {
+  return group === "comingUp" ? today : null;
+}
+
 export interface ExpectedGroups {
   /** This month's unconfirmed occurrences. */
   pending: Occurrence[];
@@ -57,11 +79,31 @@ export interface ExpectedGroups {
  * enough to catch an annual `everyNMonths` cost — and is a band-local concern.
  * `foldBalances`'s own `upToMonth` bound is untouched.
  *
+ * `today` is what a "Coming up" row would record if confirmed (see `row` in
+ * `ExpectedBand` below) — passed in rather than read from a clock, because
+ * this function is exercised directly by tests with no DOM.
+ *
+ * Two rules keep a "coming up" row from ever being offered when confirming it
+ * cannot go well (X1, X3):
+ *
+ *   - A cost with an unresolved occurrence in `monthId` or any earlier
+ *     FOLDABLE month (same bound `overdue` uses) is skipped entirely. Settle
+ *     the earlier bill first — offering a later one while an earlier sits
+ *     outstanding would let confirming the later one leave the earlier
+ *     projection standing, double-counting the bill.
+ *   - Otherwise, the row is offered only if recording it at `today` would
+ *     leave `occurrencesOf`'s walk able to advance past that slot
+ *     (`wouldAdvancePast`). A bill confirmed today for a slot far enough in
+ *     the future can rebase the series backwards, which is exactly what
+ *     `occurrencesOf` throws on — so a row that would do that must never be
+ *     offered in the first place, not offered-and-disabled.
+ *
  * Exported for `ExpectedBand.test.ts`.
  */
 export function expectedGroups(
   dataset: Dataset,
   monthId: MonthId,
+  today: IsoDate,
   horizonMonths = 12,
 ): ExpectedGroups {
   const byMonth = occurrencesByMonth(dataset, addMonths(monthId, horizonMonths));
@@ -69,6 +111,9 @@ export function expectedGroups(
 
   let overdue = 0;
   const seen = new Set<string>();
+  // Costs with an outstanding slot at or before `monthId` — X3: none of
+  // these may get a "coming up" row until that slot is settled.
+  const unresolved = new Set<string>(pending.map((o) => o.recurringId));
   const comingUp: Occurrence[] = [];
 
   for (const month of [...byMonth.keys()].sort(compareMonths)) {
@@ -81,9 +126,15 @@ export function expectedGroups(
       // foldStartMonth: foldBalances never folds those, so an occurrence out
       // there never held the projected balance down in the first place, and
       // counting it here would make the sentence below claim a gap that isn't
-      // in the number the owner is looking at.
+      // in the number the owner is looking at. The same bound applies to X3's
+      // suppression, for the same reason — a slot the fold never tracked was
+      // never "outstanding" in any number the owner can see.
       if (compareMonths(month, dataset.settings.foldStartMonth) < 0) continue;
-      overdue += occurrences.filter((o) => !o.confirmedBy).length;
+      for (const o of occurrences) {
+        if (o.confirmedBy) continue;
+        overdue += 1;
+        unresolved.add(o.recurringId);
+      }
       continue;
     }
 
@@ -95,6 +146,9 @@ export function expectedGroups(
       if (occurrence.confirmedBy) continue;
       if (seen.has(occurrence.recurringId)) continue;
       seen.add(occurrence.recurringId);
+      if (unresolved.has(occurrence.recurringId)) continue; // X3
+      const cost = dataset.recurring.find((c) => c.id === occurrence.recurringId);
+      if (!cost || !wouldAdvancePast(cost, occurrence.date, today)) continue; // X1
       comingUp.push(occurrence);
     }
   }
@@ -124,8 +178,8 @@ export function ExpectedBand({ monthId }: { monthId: MonthId }) {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
 
   const { pending, overdue, comingUp } = useMemo(
-    () => expectedGroups(dataset, monthId),
-    [dataset, monthId],
+    () => expectedGroups(dataset, monthId, today),
+    [dataset, monthId, today],
   );
 
   if (pending.length === 0 && overdue === 0 && comingUp.length === 0) return null;
@@ -135,9 +189,7 @@ export function ExpectedBand({ monthId }: { monthId: MonthId }) {
 
   /**
    * One row, shared by "Expected" and "Coming up" — they differ only in the
-   * subtitle and in what date confirming records. `recordedDate` is `null`
-   * for a this-month row (confirms at the slot's own date, `confirmOccurrence`'s
-   * default) and `today` for a coming-up row (confirms early, on purpose).
+   * subtitle and in what date confirming records, per `recordedDateFor`.
    */
   function row(occurrence: Occurrence, recordedDate: IsoDate | null) {
     const key = `${occurrence.recurringId}:${occurrence.date}`;
@@ -222,17 +274,17 @@ export function ExpectedBand({ monthId }: { monthId: MonthId }) {
     >
       {pending.length > 0 && (
         <ul className="divide-y divide-budget-rule">
-          {pending.map((occurrence) => row(occurrence, null))}
+          {pending.map((occurrence) => row(occurrence, recordedDateFor("pending", today)))}
         </ul>
       )}
 
       {comingUp.length > 0 && (
         <div className={pending.length > 0 ? "mt-4" : ""}>
-          <p className="mb-1 text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted">
+          <h3 className="mb-1 text-[0.6875rem] font-medium uppercase tracking-wider text-budget-ink-muted">
             Coming up
-          </p>
+          </h3>
           <ul className="divide-y divide-budget-rule">
-            {comingUp.map((occurrence) => row(occurrence, today))}
+            {comingUp.map((occurrence) => row(occurrence, recordedDateFor("comingUp", today)))}
           </ul>
         </div>
       )}
