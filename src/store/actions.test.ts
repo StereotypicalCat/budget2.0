@@ -515,6 +515,86 @@ describe("recurring costs", () => {
     ).toThrow(/at least 1/);
   });
 
+  describe("startDate granularity (C1)", () => {
+    test("adding a day-granular kind with a month-only startDate is refused", () => {
+      const data = draft();
+      expect(() =>
+        actions.addRecurringCost(data, {
+          ...rentInput,
+          startDate: "2026-01",
+          recurrence: { kind: "everyNDays", n: 30 },
+        }),
+      ).toThrow(/day-granular/);
+      expect(() =>
+        actions.addRecurringCost(data, {
+          ...rentInput,
+          startDate: "2026-01",
+          recurrence: { kind: "everyNWeeks", n: 1, weekday: 1 },
+        }),
+      ).toThrow(/day-granular/);
+    });
+
+    test("adding a day-granular kind with a day-granular startDate succeeds", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, {
+        ...rentInput,
+        startDate: "2026-01-05",
+        recurrence: { kind: "everyNDays", n: 30 },
+      });
+      expect(cost.startDate).toBe("2026-01-05");
+    });
+
+    test("everyNMonths accepts either granularity", () => {
+      const data = draft();
+      expect(() => actions.addRecurringCost(data, { ...rentInput, startDate: "2026-01" })).not.toThrow();
+      expect(() =>
+        actions.addRecurringCost(data, { ...rentInput, startDate: "2026-01-15" }),
+      ).not.toThrow();
+    });
+
+    // This is the exact bug: a monthly cost is created (startDate "2026-09"),
+    // then the unit dropdown switches it to a day-granular kind WITHOUT
+    // touching startDate — the only way a real edit reaches this, since the
+    // add form always starts as everyNMonths.
+    test("updating just the recurrence kind against an untouched month-only startDate is refused", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, { ...rentInput, startDate: "2026-09" });
+      expect(() =>
+        actions.updateRecurringCost(data, cost.id, { recurrence: { kind: "everyNDays", n: 30 } }),
+      ).toThrow(/day-granular/);
+      expect(() =>
+        actions.updateRecurringCost(data, cost.id, {
+          recurrence: { kind: "everyNWeeks", n: 1, weekday: 3 },
+        }),
+      ).toThrow(/day-granular/);
+      // Refused, so nothing committed — still the original month-granular kind.
+      expect(data.recurring[0]!.recurrence.kind).toBe("everyNMonths");
+    });
+
+    test("updating just startDate to a month-only value against a stored day-granular kind is refused", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, {
+        ...rentInput,
+        startDate: "2026-01-05",
+        recurrence: { kind: "everyNDays", n: 30 },
+      });
+      expect(() => actions.updateRecurringCost(data, cost.id, { startDate: "2026-01" })).toThrow(
+        /day-granular/,
+      );
+    });
+
+    test("updating recurrence and startDate together to a consistent day-granular pair succeeds", () => {
+      const data = draft();
+      const cost = actions.addRecurringCost(data, { ...rentInput, startDate: "2026-09" });
+      actions.updateRecurringCost(data, cost.id, {
+        recurrence: { kind: "everyNDays", n: 30 },
+        startDate: "2026-09-01",
+      });
+      expect(data.recurring[0]!.startDate).toBe("2026-09-01");
+      expect(data.recurring[0]!.recurrence.kind).toBe("everyNDays");
+    });
+  });
+
   test("ending sets both endedFrom and archived", () => {
     const data = draft();
     const cost = actions.addRecurringCost(data, rentInput);

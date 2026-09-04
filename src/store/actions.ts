@@ -394,15 +394,35 @@ function requireRecurrence(recurrence: Recurrence): Recurrence {
   return recurrence;
 }
 
+const DAY_GRANULAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * `everyNMonths` walks the cursor through `monthOf`, so it tolerates either
+ * granularity of `startDate`. `everyNDays` and `everyNWeeks` hand it straight
+ * to `addDays`, which throws on a month-only date — so those kinds require a
+ * day-granular `startDate` here, at the boundary, rather than three months
+ * later when a fold walks off the end of it.
+ */
+function requireStartDateGranularity(recurrence: Recurrence, startDate: IsoDate): void {
+  if (recurrence.kind === "everyNMonths") return;
+  if (!DAY_GRANULAR_DATE.test(startDate)) {
+    throw new Error(
+      `A "${recurrence.kind}" recurrence needs a day-granular startDate ("YYYY-MM-DD"), not "${startDate}"`,
+    );
+  }
+}
+
 export function addRecurringCost(
   draft: Dataset,
   cost: Omit<RecurringCost, "id" | "order">,
 ): RecurringCost {
+  const recurrence = requireRecurrence(cost.recurrence);
+  requireStartDateGranularity(recurrence, cost.startDate);
   const created: RecurringCost = {
     ...cost,
     id: newId(),
     order: draft.recurring.length,
-    recurrence: requireRecurrence(cost.recurrence),
+    recurrence,
     amount: roundMoneyValue(draft, cost.amount),
     splits: roundSplits(draft, cost.splits, cost.splitMode, cost.amount.currency),
   };
@@ -421,6 +441,13 @@ export function updateRecurringCost(
   if (changes.recurrence) {
     resolved.recurrence = requireRecurrence(changes.recurrence);
   }
+  // Runs on every update, not just one that touches recurrence or startDate:
+  // either field alone can break the pairing (a kind flip against an
+  // untouched month-only startDate is exactly how this bug was reached).
+  requireStartDateGranularity(
+    resolved.recurrence ?? cost.recurrence,
+    resolved.startDate ?? cost.startDate,
+  );
   if (changes.amount) {
     resolved.amount = roundMoneyValue(draft, changes.amount);
   }
@@ -454,13 +481,14 @@ export function moveRecurringCost(
 }
 
 /**
- * Stops a bill from `from` onward and hides it from the list.
+ * Stops a bill from `from` onward and dims it in the list.
  *
  * Both fields, because they mean different things: `endedFrom` stops the
- * PROJECTION, and `archived` only hides the row. Archiving alone would leave
- * the bill projecting forever; setting `endedFrom` alone would leave a dead
- * bill cluttering the list. Neither touches a past occurrence, so no
- * historical figure moves.
+ * PROJECTION, and `archived` only flags the row — same as a post, it stays
+ * listed (sorted in, rendered at reduced opacity) rather than being filtered
+ * out. Archiving alone would leave the bill projecting forever; setting
+ * `endedFrom` alone would leave a dead bill undimmed in the list. Neither
+ * touches a past occurrence, so no historical figure moves.
  */
 export function endRecurringCost(draft: Dataset, id: RecurringCostId, from: IsoDate): void {
   const cost = requireRecurringCost(draft, id);
