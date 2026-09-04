@@ -3,6 +3,7 @@ import { compareMonths, monthOf } from "../domain/months.ts";
 import { toDayOrdinal } from "../domain/days.ts";
 import { roundMoney } from "../domain/money.ts";
 import { currencyUsage, normalizeCurrencyCode } from "../domain/currencies.ts";
+import { wouldAdvancePast } from "../domain/occurrences.ts";
 import type {
   Currency,
   CurrencyDef,
@@ -220,12 +221,58 @@ export function addPurchase(
   return created;
 }
 
+/**
+ * A confirmation's `date` is TRUTH, and under `lastCharge` anchoring it is
+ * what `occurrencesOf` measures the NEXT occurrence from. Moved back far
+ * enough, the step from it lands at or before the slot the purchase claims,
+ * and the walk throws its "did not advance" error — out of `foldBalances`, so
+ * every month route, the year view and the summary go down at once, from an
+ * edit made in the ordinary purchase dialog that never mentioned recurring
+ * costs. Refusing the write is the only place that state can be prevented:
+ * the walk's throw is correct and must not be softened, and by the time it
+ * fires the bad data is already saved.
+ *
+ * `wouldAdvancePast` answers exactly this question and is what `ExpectedBand`
+ * asks before OFFERING a row; both must agree with the walk, so neither
+ * re-derives the condition.
+ *
+ * Two deliberate pass-throughs. A purchase with no slot is an ordinary
+ * purchase and is not checked at all — this is the hot path for every
+ * ordinary edit. A slot naming a cost that no longer exists is not checked
+ * either: a dangling source is a separate concern, and refusing here would
+ * only strand the purchase.
+ */
+function requireConfirmationAdvances(
+  draft: Dataset,
+  purchase: Purchase,
+  source: Purchase["source"],
+  date: IsoDate,
+): void {
+  if (!source) return;
+  const cost = draft.recurring.find((c) => c.id === source.recurringId);
+  if (!cost) return;
+  if (wouldAdvancePast(cost, source.occurrenceDate, date)) return;
+  throw new Error(
+    `Purchase ${purchase.id} confirms "${cost.name}" for ${source.occurrenceDate}, and ` +
+      `dating it ${date} would not move the series past that occurrence — ` +
+      `pick a later date, or delete the purchase to un-confirm the occurrence`,
+  );
+}
+
 export function updatePurchase(
   draft: Dataset,
   purchaseId: PurchaseId,
   changes: Partial<Omit<Purchase, "id">>,
 ): void {
   const purchase = requirePurchase(draft, purchaseId);
+  if (changes.date !== undefined && changes.date !== purchase.date) {
+    requireConfirmationAdvances(
+      draft,
+      purchase,
+      "source" in changes ? changes.source : purchase.source,
+      changes.date,
+    );
+  }
   const resolved: Partial<Omit<Purchase, "id">> = { ...changes };
   if (changes.total) {
     resolved.total = roundMoneyValue(draft, changes.total);

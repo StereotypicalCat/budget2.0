@@ -820,3 +820,102 @@ describe("confirmOccurrence", () => {
     expect(() => actions.confirmOccurrence(draft(), "nope", "2026-03")).toThrow(/Unknown recurring cost/);
   });
 });
+
+/**
+ * Confirming a slot writes an ORDINARY purchase, and the ordinary purchase
+ * dialog can then edit its date — an action with nothing on its face to do
+ * with recurring costs. Under `lastCharge` anchoring that date is what the
+ * walk measures the next occurrence from, so moving it back far enough makes
+ * the walk step backwards and throw out of `foldBalances`, taking every month
+ * route, the year view and the summary down together. The write is refused
+ * here so that state cannot be reached.
+ */
+describe("editing a confirmation's date", () => {
+  function carDraft(anchoring: "calendar" | "lastCharge" = "lastCharge"): Dataset {
+    const data = createSeedDataset("2026-08");
+    data.posts[0]!.id = "housing";
+    actions.addRecurringCost(data, {
+      name: "Car insurance",
+      archived: false,
+      amount: { amount: 900, currency: "DKK" },
+      startDate: "2026-08-14",
+      recurrence: { kind: "everyNDays", n: 30 },
+      anchoring,
+      splitMode: "percent",
+      splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+    });
+    return data;
+  }
+
+  /** The walk every month route, the year view and the summary go through. */
+  function folds(data: Dataset): () => unknown {
+    return () => occurrencesByMonth(data, "2026-12");
+  }
+
+  function dateOf(data: Dataset, purchaseId: string): string {
+    return data.purchases.find((p) => p.id === purchaseId)!.date;
+  }
+
+  test("a date more than one cycle before the slot it claims is refused", () => {
+    const data = carDraft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-09-13", {
+      date: "2026-09-13",
+    });
+    expect(folds(data)).not.toThrow();
+
+    expect(() => actions.updatePurchase(data, purchase.id, { date: "2026-08-01" })).toThrow(
+      /Car insurance/,
+    );
+    expect(dateOf(data, purchase.id)).toBe("2026-09-13");
+    expect(folds(data)).not.toThrow();
+  });
+
+  test("a date that keeps the series advancing is still allowed", () => {
+    const data = carDraft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-09-13", {
+      date: "2026-09-13",
+    });
+
+    actions.updatePurchase(data, purchase.id, { date: "2026-09-08" });
+    expect(dateOf(data, purchase.id)).toBe("2026-09-08");
+    expect(folds(data)).not.toThrow();
+  });
+
+  test("a purchase with no slot is an ordinary purchase and moves freely", () => {
+    const data = carDraft();
+    const purchase = actions.addPurchase(data, {
+      date: "2026-09-13",
+      description: "Sofa",
+      total: { amount: 100, currency: "DKK" },
+      splitMode: "percent",
+      splits: [{ postId: "housing", value: 100, absorbsRemainder: true }],
+      schedule: null,
+    });
+
+    actions.updatePurchase(data, purchase.id, { date: "2026-01-01" });
+    expect(dateOf(data, purchase.id)).toBe("2026-01-01");
+    expect(folds(data)).not.toThrow();
+  });
+
+  test("a calendar-anchored cost's confirmation moves freely, because it never rebases", () => {
+    const data = carDraft("calendar");
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-09-13", {
+      date: "2026-09-13",
+    });
+
+    actions.updatePurchase(data, purchase.id, { date: "2026-08-01" });
+    expect(dateOf(data, purchase.id)).toBe("2026-08-01");
+    expect(folds(data)).not.toThrow();
+  });
+
+  test("a slot naming a cost that no longer exists does not block the edit", () => {
+    const data = carDraft();
+    const purchase = actions.confirmOccurrence(data, data.recurring[0]!.id, "2026-09-13", {
+      date: "2026-09-13",
+    });
+    data.recurring = [];
+
+    actions.updatePurchase(data, purchase.id, { date: "2026-08-01" });
+    expect(dateOf(data, purchase.id)).toBe("2026-08-01");
+  });
+});
