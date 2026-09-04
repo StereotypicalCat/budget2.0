@@ -104,7 +104,12 @@ const buy = (date: string, description: string, amount: number, currency: "DKK" 
 
 for (let m = 1; m <= 9; m++) {
   const mm = String(m).padStart(2, "0");
-  buy(`2026-${mm}-01`, "Rent", 8200, "DKK", rent.id);
+  // The "Rent" recurring cost above starts 2026-06 and is left unconfirmed,
+  // so it already projects an expected charge for June onward. An ordinary
+  // Rent purchase in those same months would double-charge the post in the
+  // screenshots — one from `charges`, one from `expected` — so this ordinary
+  // purchase only covers the months before the recurring cost exists.
+  if (m < 6) buy(`2026-${mm}-01`, "Rent", 8200, "DKK", rent.id);
   buy(`2026-${mm}-04`, "Groceries", 1180 + m * 37, "DKK", food.id);
   buy(`2026-${mm}-18`, "Groceries", 1420 - m * 12, "DKK", food.id);
   buy(`2026-${mm}-06`, "Commuter pass", 1100, "DKK", transport.id);

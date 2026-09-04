@@ -67,8 +67,8 @@ Confirmed and in place:
   browser.
 - Offline-capable installable PWA. Currently deploys as one static artifact to
   both GitHub Pages (under a subpath) and a self-hosted Docker image.
-- Recurring costs — a bill that repeats monthly, every N days, or every N
-  weeks on a weekday, split across posts like any purchase. Each due date is a
+- Recurring costs — a bill that repeats every N months, every N days, or
+  every N weeks on a weekday, split across posts like any purchase. Each due date is a
   projected occurrence the owner confirms into a real purchase; the month view
   shows what is still expected alongside a second, projected balance per post,
   so a known bill is visible before it is paid without touching the reconciled
